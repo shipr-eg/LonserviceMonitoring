@@ -1,0 +1,6 @@
+Company,Employee_Name,Payroll_Error_Type,Amount,Error_Date,Department,Severity
+TechCorp Solutions,John Smith,Overtime Calculation Error,245.50,2025-09-15,Engineering,High
+TechCorp Solutions,Sarah Johnson,Tax Withholding Error,89.25,2025-09-15,Marketing,Medium
+Global Industries,Mike Chen,Bonus Miscalculation,1250.00,2025-09-15,Sales,High
+DataFlow Inc,Emma Wilson,Holiday Pay Error,186.75,2025-09-15,Operations,Low
+Manufacturing Plus,Lisa Anderson,Shift Differential Error,45.00,2025-09-15,Production,Low

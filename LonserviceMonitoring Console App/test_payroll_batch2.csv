@@ -1,0 +1,11 @@
+Company,Employee_ID,Employee_Name,Position,Payroll_Error_Type,Error_Amount,Issue_Date,Priority,Cost_Center,Resolution_Status
+TechCorp Solutions,EMP011,Kevin Rodriguez,Senior Developer,Stock Option Error,2340.50,2025-09-17,Urgent,CC-ENG-001,Pending
+DataFlow Systems,EMP012,Laura White,Project Manager,Overtime Rate Wrong,567.25,2025-09-17,High,CC-OPS-003,In Progress
+Manufacturing Plus,EMP013,Mark Anderson,Floor Supervisor,Night Shift Bonus Missing,234.75,2025-09-16,Medium,CC-PROD-005,New
+Global Industries,EMP014,Nancy Johnson,Account Executive,Sales Commission Underpaid,1876.40,2025-09-17,Critical,CC-SALES-002,Escalated
+TechCorp Solutions,EMP015,Oliver Kim,DevOps Engineer,On-Call Pay Missing,445.80,2025-09-17,High,CC-ENG-001,Pending
+InnovateTech Corp,EMP016,Paula Chen,Research Scientist,Patent Bonus Error,3250.00,2025-09-16,Critical,CC-RND-001,Under Review
+DataFlow Systems,EMP017,Quinn Davis,Business Analyst,Training Allowance Missing,125.50,2025-09-17,Low,CC-OPS-003,New
+Manufacturing Plus,EMP018,Rachel Green,Quality Inspector,Hazard Pay Incorrect,178.90,2025-09-16,Medium,CC-PROD-005,In Progress
+Global Industries,EMP019,Steve Martinez,Regional Manager,Expense Reimbursement Delayed,987.35,2025-09-17,High,CC-SALES-002,Pending
+TechCorp Solutions,EMP020,Tina Thompson,QA Lead,Performance Bonus Miscalculated,1567.25,2025-09-17,High,CC-ENG-001,New

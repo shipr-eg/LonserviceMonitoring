@@ -1,0 +1,11 @@
+Company,Employee_ID,Employee_Name,Department,Payroll_Error_Type,Amount,Error_Date,Severity,Manager
+TechCorp Solutions,EMP001,Alice Johnson,Engineering,Overtime Miscalculation,245.50,2025-09-16,High,Sarah Mitchell
+Global Industries,EMP002,Bob Wilson,Sales,Commission Error,1125.75,2025-09-16,Critical,Mike Roberts
+DataFlow Systems,EMP003,Carol Davis,Operations,Holiday Pay Missing,186.25,2025-09-15,Medium,Lisa Chen
+TechCorp Solutions,EMP004,David Brown,Marketing,Tax Withholding Error,89.30,2025-09-16,Low,Sarah Mitchell
+Manufacturing Plus,EMP005,Emma Taylor,Production,Shift Premium Error,67.45,2025-09-15,Medium,Tom Anderson
+Global Industries,EMP006,Frank Miller,Finance,Bonus Calculation Error,890.00,2025-09-16,High,Mike Roberts
+DataFlow Systems,EMP007,Grace Lee,HR,Benefits Deduction Error,156.80,2025-09-15,Medium,Lisa Chen
+InnovateTech Corp,EMP008,Henry Clark,Research,Expense Reimbursement Error,423.90,2025-09-16,Low,Dr. James Wilson
+TechCorp Solutions,EMP009,Iris Martinez,Engineering,Double Pay Entry,1245.00,2025-09-16,Critical,Sarah Mitchell
+Global Industries,EMP010,Jack Thompson,Operations,Vacation Pay Error,324.75,2025-09-15,Medium,Mike Roberts

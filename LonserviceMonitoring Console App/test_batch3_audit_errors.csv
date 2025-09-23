@@ -1,0 +1,6 @@
+Company,Employee_Name,Payroll_Error_Type,Amount,Location,Correction_Amount,Impact_Level,Audit_Trail,Quarter
+TechCorp Solutions,Mark Anderson,State Tax Error,67.89,California,-67.89,Low,AUD-2025-001,Q3
+Global Industries,Patricia Martinez,Overtime Rate Error,387.45,New York,387.45,Medium,AUD-2025-002,Q3
+Manufacturing Plus,Kimberly Wilson,Hazard Pay Error,189.30,Ohio,189.30,Medium,AUD-2025-003,Q3
+DataFlow Inc,Ryan Garcia,Timecard Rounding Error,23.75,Florida,23.75,Low,AUD-2025-004,Q3
+Retail Dynamics,Ashley Martinez,PTO Accrual Error,67.20,Texas,67.20,Medium,AUD-2025-005,Q3
