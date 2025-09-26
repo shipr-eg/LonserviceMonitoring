@@ -7,6 +7,7 @@ let toastTimeout;
 let isAdmin = false;
 let currentPage = 1;
 const recordsPerPage = 10;
+let employeesLists = [];
 
 // Column visibility settings
 let columnVisibilitySettings = {};
@@ -72,11 +73,8 @@ async function loadDashboardConfiguration() {
 
     dashboardConfig = await response.json();
     console.log("Fetching dashboard configuration...");
-    console.log(response);
     systemColumns = dashboardConfig.systemColumns || [];
     essentialColumns = dashboardConfig.essentialColumns || [];
-
-    console.log("Dashboard configuration loaded:", dashboardConfig);
   } catch (error) {
     console.error("Error loading dashboard configuration:", error);
     // Fallback to default configuration
@@ -108,6 +106,11 @@ async function initializeDashboard() {
     if (!response.ok) throw new Error("Failed to fetch data");
 
     allData = await response.json();
+
+    // Load Employee list here
+    const employeeResponse = await fetch("/api/data/employees");
+    if (!employeeResponse.ok) throw new Error("Failed to fetch data");
+    employeesLists = await employeeResponse.json();
 
     // Initialize column visibility settings
     initializeColumnVisibility();
@@ -221,6 +224,15 @@ function createCompanyGroup(company, data, columns) {
   const contactedCount = data.filter((r) => r.contacted).length;
   const notContactedCount = data.length - contactedCount;
   const companyId = company.replace(/\s+/g, "-").toLowerCase();
+  const assignee = data[0].assigneeName || "Unassigned";
+
+  // Find the employee ID that matches the assignee name
+  // const selectedEmployee = employeesLists.find(
+  //   (emp) => emp.fullName === data[0].assigneeName
+  // );
+  // const selectedEmployeeId = selectedEmployee
+  //   ? selectedEmployee.employeeID
+  //   : "";
 
   groupDiv.innerHTML = `
         <div class="group-header" 
@@ -243,7 +255,22 @@ function createCompanyGroup(company, data, columns) {
                         </span>
                         <span class="badge bg-warning text-dark">
                             Not Contacted: <span id="not-contacted-${company}">${notContactedCount}</span>
-                        </span>
+                        </span> 
+                        <select id="employee-select-${companyId}" class="form-select form-select-sm" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', this.value)">
+                            <option value="">Select Employee</option>
+                            ${employeesLists
+                              .map(
+                                (emp) =>
+                                  `<option  value="${emp.employeeID}" ${
+                                    emp.fullName === assignee ? "selected" : ""
+                                  }>${emp.fullName}</option>`
+                              )
+                              .join("")}
+                        </select>
+                        <button class="btn btn-sm " onclick="showCompanyHistory('${company}', event)">
+                            <i class="fas fa-history text-white"></i>
+                        </button>
+
                     </div>
                 </div>
                 <div class="collapse-icon">
@@ -961,6 +988,33 @@ function updateSummaryCounts() {
   });
 }
 
+// Handle employee selection
+function handleEmployeeSelection(company, assignee) {
+  if (assignee && company) {
+    const companyObj = { company, assignee };
+    addNewCompanyDetails(companyObj);
+  }
+}
+// Add new company details
+function addNewCompanyDetails(companyObj) {
+  fetch("/api/data/companies", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(companyObj),
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+      return response.json();
+    })
+    .then((data) => {
+      showToast("added successfully!", "success");
+    })
+    .catch((error) => {
+      showError("Error adding company assignee", "error");
+    });
+}
 // Admin functions
 function toggleAdminView() {
   const modal = new bootstrap.Modal(document.getElementById("adminModal"));
@@ -1444,4 +1498,121 @@ function showToast(message, type = "info") {
     .addEventListener("hidden.bs.toast", function () {
       this.remove();
     });
+}
+
+// Company History Functions
+async function showCompanyHistory(company, event) {
+  // Stop event propagation
+  event.stopPropagation();
+
+  try {
+    // Show loading state
+    const modal = new bootstrap.Modal(
+      document.getElementById("companyHistoryModal")
+    );
+    const modalTitle = document.getElementById("companyHistoryModalTitle");
+    const tableBody = document.getElementById("companyHistoryTableBody");
+    const loadingDiv = document.getElementById("companyHistoryLoading");
+    const tableDiv = document.getElementById("companyHistoryTable");
+
+    // Set modal title
+    modalTitle.textContent = `History for ${company}`;
+
+    // Show loading state
+    loadingDiv.style.display = "block";
+    tableDiv.style.display = "none";
+
+    // Show modal
+    modal.show();
+
+    // Call REST API
+    const response = await fetch(
+      `/api/data/companies/${encodeURIComponent(company)}`
+    );
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Hide loading and show table
+    loadingDiv.style.display = "none";
+    tableDiv.style.display = "block";
+
+    // Populate table
+    populateCompanyHistoryTable(data, tableBody);
+  } catch (error) {
+    console.error("Error fetching company history:", error);
+    showError(`Failed to load history for ${company}. Please try again.`);
+
+    // Hide loading and show table with error message
+    const loadingDiv = document.getElementById("companyHistoryLoading");
+    const tableDiv = document.getElementById("companyHistoryTable");
+    const tableBody = document.getElementById("companyHistoryTableBody");
+
+    if (loadingDiv) loadingDiv.style.display = "none";
+    if (tableDiv) tableDiv.style.display = "block";
+
+    // Show "No records found" message in the table
+    if (tableBody) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">
+            <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
+            No history records found for this company.
+          </td>
+        </tr>
+      `;
+    }
+  }
+}
+
+function populateCompanyHistoryTable(data, tableBody) {
+  if (!data || data.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="5" class="text-center text-muted py-4">
+          <i class="fas fa-info-circle me-2"></i>
+          No history records found for this company.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tableBody.innerHTML = data
+    .map(
+      (record) => `
+    <tr>
+      <td>${record.assigneeName || "N/A"}</td>
+      <td>
+        <span class="badge ${getProcessedStatusBadge(record.processedStatus)}">
+          ${record.processedStatus || "Unknown"}
+        </span>
+      </td>
+      <td>${record.totalRecords || 0}</td>
+      <td>${record.contactedRecords || 0}</td>
+      <td>${formatDate(record.created)}</td>
+    </tr>
+  `
+    )
+    .join("");
+}
+
+function getProcessedStatusBadge(status) {
+  switch ((status || "").toLowerCase()) {
+    case "completed":
+    case "complete":
+      return "bg-success";
+    case "in progress":
+    case "processing":
+      return "bg-warning text-dark";
+    case "failed":
+    case "error":
+      return "bg-danger";
+    case "pending":
+      return "bg-secondary";
+    default:
+      return "bg-light text-dark";
+  }
 }
