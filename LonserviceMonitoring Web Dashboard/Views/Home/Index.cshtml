@@ -290,7 +290,7 @@
         <!-- Global Search -->
         <div class="search-controls">
             <div class="row">
-                <div class="col-md-6">
+                <div class="col-md-5">
                     <div class="input-group">
                         <span class="input-group-text">
                             <i class="fas fa-search"></i>
@@ -299,7 +299,7 @@
                                placeholder="Global search across all data...">
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-7">
                     <div class="d-flex gap-2">
                         <button class="btn btn-outline-primary" onclick="expandAllGroups()">
                             <i class="fas fa-expand-alt me-1"></i> Expand All
@@ -309,6 +309,9 @@
                         </button>
                         <button class="btn btn-outline-info" onclick="showColumnVisibilityModal()">
                             <i class="fas fa-columns me-1"></i> Columns
+                        </button>
+                        <button class="btn btn-outline-primary">
+                             <i class="fas fa-history"></i> History
                         </button>
                         <button class="btn btn-outline-secondary" onclick="clearAllFilters()">
                             <i class="fas fa-times me-1"></i> Clear Filters
@@ -477,8 +480,6 @@
                                     <tr>
                                         <th>Assignee Name</th>
                                         <th>Processed Status</th>
-                                        <th>Total Records</th>
-                                        <th>Contacted Records</th>
                                         <th>Created</th>
                                     </tr>
                                 </thead>

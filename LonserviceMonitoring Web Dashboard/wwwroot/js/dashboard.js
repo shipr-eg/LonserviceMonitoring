@@ -173,6 +173,11 @@ function renderGroupedData() {
       const groupData = groupedData[company];
       const groupElement = createCompanyGroup(company, groupData, columns);
       container.appendChild(groupElement);
+
+      // Apply default contacted filter after DOM is ready
+      setTimeout(() => {
+        applyGroupFilters(company);
+      }, 0);
     });
 
   container.style.display = "block";
@@ -225,6 +230,10 @@ function createCompanyGroup(company, data, columns) {
   const notContactedCount = data.length - contactedCount;
   const companyId = company.replace(/\s+/g, "-").toLowerCase();
   const assignee = data[0].assigneeName || "Unassigned";
+  const processedStatus = data[0].processedStatus || "Not Started";
+  const statusOptions = ["Not Started", "In Progress", "Waiting", "Processed"];
+
+  // const status = data[0].status || "Unassigned";
 
   // Find the employee ID that matches the assignee name
   // const selectedEmployee = employeesLists.find(
@@ -251,12 +260,13 @@ function createCompanyGroup(company, data, columns) {
   }</span>
                         </span>
                         <span class="badge bg-success">
-                            Contacted: <span id="contacted-${company}">${contactedCount}</span>
+                            Confirmed: <span id="contacted-${company}">${contactedCount}</span>
                         </span>
                         <span class="badge bg-warning text-dark">
-                            Not Contacted: <span id="not-contacted-${company}">${notContactedCount}</span>
+                            Not confirmed: <span id="not-contacted-${company}">${notContactedCount}</span>
                         </span> 
-                        <select id="employee-select-${companyId}" class="form-select form-select-sm" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', this.value)">
+                        <label>Assignee:</label>
+                        <select id="employee-select-${companyId}" class="form-select form-select-sm" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', this.value, null)">
                             <option value="">Select Employee</option>
                             ${employeesLists
                               .map(
@@ -266,6 +276,19 @@ function createCompanyGroup(company, data, columns) {
                                   }>${emp.fullName}</option>`
                               )
                               .join("")}
+                        </select>
+                        <label>Status:</label>
+                        <select id="status-select-${companyId}" class="form-select form-select-sm" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', null, this.value)" >
+                        <option value="">Select Status</option>    
+                        ${statusOptions
+                          .map(
+                            (status) => ` 
+                                <option value="${status}" ${
+                              processedStatus === status ? "selected" : ""
+                            }>${status}</option>
+                            `
+                          )
+                          .join("")}  
                         </select>
                         <button class="btn btn-sm " onclick="showCompanyHistory('${company}', event)">
                             <i class="fas fa-history text-white"></i>
@@ -399,10 +422,10 @@ function createColumnFilter(columnName, company) {
 
   if (columnName.toLowerCase() === "contacted") {
     return `
-            <select class="filter-input" id="${filterId}" onchange="filterByColumn('${company}', '${columnName}', this.value)">
+            <select class="filter-input active-filter" id="${filterId}" onchange="filterByColumn('${company}', '${columnName}', this.value)">
                 <option value="">All</option>
                 <option value="true">Yes</option>
-                <option value="false">No</option>
+                <option value="false" selected>No</option>
             </select>
         `;
   } else {
@@ -789,6 +812,7 @@ async function saveAllChanges() {
     // Clear pending changes and original values
     pendingChanges.clear();
     originalValues.clear();
+    removeContactedCompany();
 
     // Hide toast after success
     setTimeout(() => {
@@ -803,6 +827,18 @@ async function saveAllChanges() {
     saveButton.textContent = originalText;
   }
 }
+
+removeContactedCompany = () => {
+  Object.keys(groupedData).forEach((c) => {
+    const data = groupedData[c];
+    const contactedCount = data.filter((r) => r.contacted).length;
+    const groupElement = `group-${c.replace(/\s+/g, "-")}`;
+    if (contactedCount === data.length) {
+      document.getElementById(groupElement).remove();
+      delete groupedData[c];
+    }
+  });
+};
 
 // Filter functions
 function performGlobalSearch() {
@@ -989,9 +1025,14 @@ function updateSummaryCounts() {
 }
 
 // Handle employee selection
-function handleEmployeeSelection(company, assignee) {
-  if (assignee && company) {
-    const companyObj = { company, assignee };
+function handleEmployeeSelection(
+  company,
+  assignee = null,
+  processedStatus = null
+) {
+  if (company) {
+    const companyObj = { company, assignee, processedStatus };
+    console.log(companyObj);
     addNewCompanyDetails(companyObj);
   }
 }
@@ -1590,8 +1631,6 @@ function populateCompanyHistoryTable(data, tableBody) {
           ${record.processedStatus || "Unknown"}
         </span>
       </td>
-      <td>${record.totalRecords || 0}</td>
-      <td>${record.contactedRecords || 0}</td>
       <td>${formatDate(record.created)}</td>
     </tr>
   `

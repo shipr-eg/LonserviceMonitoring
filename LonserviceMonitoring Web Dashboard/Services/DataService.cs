@@ -19,7 +19,7 @@ namespace LonserviceMonitoring.Services
         public async Task<List<CsvDataModel>> GetAllDataAsync()
         {
             var data = new List<CsvDataModel>();
-            
+
             if (_connection.State != ConnectionState.Open)
                 await _connection.OpenAsync();
 
@@ -42,28 +42,76 @@ namespace LonserviceMonitoring.Services
             //             WHERE cd2.Company = cd1.Company
             //         )
             //     ) AS cd ON c.Company = cd.Company";
-        
-        command.CommandText = @"SELECT 
-    c.*,
-    (e.FirstName + ' ' + e.LastName) AS AssigneeName
-FROM [LonserviceMonitoringDB].[dbo].[CsvData] AS c
-LEFT JOIN (
-    SELECT 
-        Company,
-        Assignee
-    FROM [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd1
-    WHERE cd1.Created = (
-        SELECT MAX(cd2.Created)
-        FROM [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd2
-        WHERE cd2.Company = cd1.Company
-    )
-) AS cd ON c.Company = cd.Company
-LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e 
-    ON e.EmployeeID = cd.Assignee ";
+
+            //             command.CommandText = @"SELECT 
+            //     c.*,
+            //     (e.FirstName + ' ' + e.LastName) AS AssigneeName
+            // FROM [LonserviceMonitoringDB].[dbo].[CsvData] AS c
+            // LEFT JOIN (
+            //     SELECT 
+            //         Company,
+            //         Assignee
+            //     FROM [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd1
+            //     WHERE cd1.Created = (
+            //         SELECT MAX(cd2.Created)
+            //         FROM [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd2
+            //         WHERE cd2.Company = cd1.Company
+            //     )
+            // ) AS cd ON c.Company = cd.Company
+            // LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e 
+            //     ON e.EmployeeID = cd.Assignee ";
+
+            // command.CommandText = @"SELECT 
+            //     c.*,
+            //     cd.ProcessedStatus,
+            //     (e.FirstName + ' ' + e.LastName) AS AssigneeName
+            // FROM [LonserviceMonitoringDB].[dbo].[CsvData] AS c
+            // LEFT JOIN (
+            //     SELECT 
+            //         Company,
+            //         Assignee,
+            //         ProcessedStatus
+            //     FROM [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd1
+            //     WHERE cd1.Created = (
+            //         SELECT MAX(cd2.Created)
+            //         FROM [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd2
+            //         WHERE cd2.Company = cd1.Company
+            //     )
+            // ) AS cd 
+            //     ON c.Company = cd.Company
+            // LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e 
+            //     ON e.EmployeeID = cd.Assignee";
+
+            command.CommandText = @"SELECT 
+                c.*,
+                cd.ProcessedStatus,
+                (e.FirstName + ' ' + e.LastName) AS AssigneeName
+            FROM [LonserviceMonitoringDB].[dbo].[CsvData] AS c
+            LEFT JOIN (
+                SELECT 
+                    Company,
+                    Assignee,
+                    ProcessedStatus
+                FROM [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd1
+                WHERE cd1.Created = (
+                    SELECT MAX(cd2.Created)
+                    FROM [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd2
+                    WHERE cd2.Company = cd1.Company
+                )
+            ) AS cd 
+                ON c.Company = cd.Company
+            LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e 
+                ON e.EmployeeID = cd.Assignee
+            WHERE EXISTS (
+                SELECT 1
+                FROM [LonserviceMonitoringDB].[dbo].[CsvData] AS c2
+                WHERE c2.Company = c.Company
+                AND (c2.Contacted = 0 OR c2.Contacted IS NULL)
+            )"; 
 
             using var reader = await command.ExecuteReaderAsync();
             var columnNames = new List<string>();
-            
+
             // Get all column names
             for (int i = 0; i < reader.FieldCount; i++)
             {
@@ -97,7 +145,10 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
                         case "assigneename":
                             record.AssigneeName = value?.ToString();
                             break;
-                         case "notes":
+                        case "processedstatus":
+                            record.ProcessedStatus = value?.ToString();
+                            break;
+                        case "notes":
                             record.Notes = value?.ToString();
                             break;
                         default:
@@ -162,7 +213,7 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
                 await _connection.OpenAsync();
 
             using var command = _connection.CreateCommand();
-            
+
             if (string.IsNullOrEmpty(searchTerm))
             {
                 command.CommandText = "SELECT TOP 1000 * FROM AuditLog ORDER BY Timestamp DESC";
@@ -242,7 +293,7 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
             command.CommandText = "SELECT TOP 1 * FROM CsvData";
 
             using var reader = await command.ExecuteReaderAsync();
-            
+
             for (int i = 0; i < reader.FieldCount; i++)
             {
                 columns.Add(reader.GetName(i));
@@ -254,7 +305,7 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
         public async Task<List<EmployeeList>> GetAllEmployeesAsync()
         {
             var employees = new List<EmployeeList>();
-            
+
             if (_connection.State != ConnectionState.Open)
                 await _connection.OpenAsync();
 
@@ -291,7 +342,7 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
 
             using var command = _connection.CreateCommand();
             command.CommandText = @"
-                SELECT Company, Assignee, ProcessedStatus, TotalRecords, ContactedRecords, Created 
+                SELECT Company, Assignee, ProcessedStatus, Created 
                 FROM CompanyDetails 
                 ORDER BY Company";
 
@@ -304,8 +355,6 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
                     Company = reader.IsDBNull("Company") ? "" : reader["Company"].ToString() ?? "",
                     Assignee = reader.IsDBNull("Assignee") ? 0 : Convert.ToInt32(reader["Assignee"]),
                     ProcessedStatus = reader.IsDBNull("ProcessedStatus") ? "" : reader["ProcessedStatus"].ToString() ?? "",
-                    TotalRecords = reader.IsDBNull("TotalRecords") ? 0 : Convert.ToInt32(reader["TotalRecords"]),
-                    ContactedRecords = reader.IsDBNull("ContactedRecords") ? 0 : Convert.ToInt32(reader["ContactedRecords"]),
                     Created = reader["Created"] == DBNull.Value ? null : Convert.ToDateTime(reader["Created"])
                 });
             }
@@ -330,8 +379,6 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
                     cd.Assignee,
                     el.FirstName + ' ' + el.LastName AS AssigneeName,
                     cd.ProcessedStatus,
-                    cd.TotalRecords,
-                    cd.ContactedRecords,
                     cd.Created
                 FROM CompanyDetails cd
                 LEFT JOIN EmployeeList el 
@@ -339,7 +386,7 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
                 WHERE cd.Company = @companyName
                 ORDER BY cd.Created DESC";
 
-            
+
             command.Parameters.Add(new SqlParameter("@companyName", companyName));
 
             using var reader = await command.ExecuteReaderAsync();
@@ -351,10 +398,8 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
                     Assignee = reader.IsDBNull("Assignee") ? 0 : Convert.ToInt32(reader["Assignee"]),
                     AssigneeName = reader.IsDBNull("AssigneeName") ? "" : reader["AssigneeName"].ToString() ?? "",
                     ProcessedStatus = reader.IsDBNull("ProcessedStatus") ? "" : reader["ProcessedStatus"].ToString() ?? "",
-                    TotalRecords = reader.IsDBNull("TotalRecords") ? 0 : Convert.ToInt32(reader["TotalRecords"]),
-                    ContactedRecords = reader.IsDBNull("ContactedRecords") ? 0 : Convert.ToInt32(reader["ContactedRecords"]),
                     Created = reader["Created"] == DBNull.Value ? null : Convert.ToDateTime(reader["Created"]),
-                    
+
                 });
             }
 
@@ -368,25 +413,55 @@ LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e
                 if (_connection.State != ConnectionState.Open)
                     await _connection.OpenAsync();
 
-                using var command = _connection.CreateCommand();
-                 command.CommandText = @"
-                        INSERT INTO CompanyDetails (Company, Assignee, ProcessedStatus, TotalRecords, ContactedRecords)
-                        VALUES (@company, @assignee, @processedStatus, @totalRecords, @contactedRecords)";
-                // command.Parameters.Add(new SqlParameter("@companyID", company.CompanyID));
-                 command.Parameters.Add(new SqlParameter("@company", company.Company));
-                command.Parameters.Add(new SqlParameter("@assignee", company.Assignee));
-                command.Parameters.Add(new SqlParameter("@processedStatus", company.ProcessedStatus));
-                command.Parameters.Add(new SqlParameter("@totalRecords", company.TotalRecords));
-                command.Parameters.Add(new SqlParameter("@contactedRecords", company.ContactedRecords));
+                // Get the latest existing record for this company (if any)
+                CompanyDetails existing = null;
+                using (var fetchCommand = _connection.CreateCommand())
+                {
+                    fetchCommand.CommandText = @"
+                        SELECT TOP 1 Company, Assignee, ProcessedStatus
+                        FROM CompanyDetails
+                        WHERE Company = @company
+                        ORDER BY Created DESC";
+                    fetchCommand.Parameters.Add(new SqlParameter("@company", company.Company));
 
-                var newId = await command.ExecuteScalarAsync();
-                return Convert.ToInt32(newId);
+                    using var reader = await fetchCommand.ExecuteReaderAsync();
+                    if (await reader.ReadAsync())
+                    {
+                        existing = new CompanyDetails
+                        {
+                            Company = reader.IsDBNull("Company") ? null : reader.GetString("Company"),
+                            Assignee = reader.IsDBNull("Assignee") ? null : reader.GetInt32("Assignee"),
+                            ProcessedStatus = reader.IsDBNull("ProcessedStatus") ? null : reader.GetString("ProcessedStatus")
+                        };
+                    }
+                }
+
+                // Merge: Use existing values for any null/missing fields
+                var merged = new CompanyDetails
+                {
+                    Company = company.Company, // this should always be passed
+                    Assignee = company.Assignee ?? existing?.Assignee,
+                    ProcessedStatus = string.IsNullOrEmpty(company.ProcessedStatus) ? existing?.ProcessedStatus : company.ProcessedStatus
+                };
+
+                // Insert merged record
+                using var insertCommand = _connection.CreateCommand();
+                insertCommand.CommandText = @"
+                    INSERT INTO CompanyDetails (Company, Assignee, ProcessedStatus)
+                    VALUES (@company, @assignee, @processedStatus)";
+
+                insertCommand.Parameters.Add(new SqlParameter("@company", merged.Company));
+                insertCommand.Parameters.Add(new SqlParameter("@assignee", (object?)merged.Assignee ?? DBNull.Value));
+                insertCommand.Parameters.Add(new SqlParameter("@processedStatus", (object?)merged.ProcessedStatus ?? DBNull.Value));
+
+                var rowsAffected = await insertCommand.ExecuteNonQueryAsync();
+                return rowsAffected > 0 ? 1 : 0; // Return 1 for success, 0 for failure
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error inserting company details: {ex.Message}");
                 throw;
             }
-        }        
+        }                
     }
 }

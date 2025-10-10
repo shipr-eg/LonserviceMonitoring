@@ -11,6 +11,7 @@ namespace LonserviceMonitoring.Models
         public bool Contacted { get; set; }
         public string? Notes { get; set; }
         public string? AssigneeName { get; set; }
+        public string? ProcessedStatus { get; set; }
         
         // public int? Assignee { get; set; }
 
@@ -68,12 +69,10 @@ namespace LonserviceMonitoring.Models
     public class CompanyDetails
     { 
         public string Company { get; set; } = string.Empty;
-        public int Assignee { get; set; }
+        public int? Assignee { get; set; }
         
         public string? AssigneeName { get; set; }
-        public string ProcessedStatus { get; set; } = string.Empty;
-        public int TotalRecords { get; set; }
-        public int ContactedRecords { get; set; }
+        public string? ProcessedStatus { get; set; }
         public DateTime? Created { get; set; }
         
         // Additional computed property for display purposes
