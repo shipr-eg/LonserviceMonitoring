@@ -19,17 +19,26 @@ namespace LonserviceMonitoring.Services
         public async Task<List<CsvDataModel>> GetAllDataAsync()
         {
             var data = new List<CsvDataModel>();
-            
+
             if (_connection.State != ConnectionState.Open)
                 await _connection.OpenAsync();
 
             using var command = _connection.CreateCommand();
             // Select all columns - we'll filter out system columns in code
-            command.CommandText = "SELECT * FROM CsvData ORDER BY Company, Id";
-
+            // command.CommandText = "SELECT * FROM CsvData ORDER BY Company, Id";
+            command.CommandText = @"SELECT 
+                c.*,
+                cd.ProcessedStatus,
+                (e.FirstName + ' ' + e.LastName) AS AssigneeName
+            FROM [LonserviceMonitoringDB].[dbo].[CsvData] AS c
+            LEFT JOIN [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd 
+                ON c.Company = cd.Company
+            LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e 
+                ON e.EmployeeID = cd.Assignee";
+            
             using var reader = await command.ExecuteReaderAsync();
             var columnNames = new List<string>();
-            
+
             // Get all column names
             for (int i = 0; i < reader.FieldCount; i++)
             {
@@ -57,8 +66,14 @@ namespace LonserviceMonitoring.Services
                         case "company":
                             record.Company = value?.ToString();
                             break;
-                        case "contacted":
-                            record.Contacted = Convert.ToBoolean(value ?? false);
+                        case "confirmed":
+                            record.Confirmed = Convert.ToBoolean(value ?? false);
+                            break;
+                        case "assigneename":
+                            record.AssigneeName = value?.ToString();
+                            break;
+                        case "processedstatus":
+                            record.ProcessedStatus = value?.ToString();
                             break;
                         case "notes":
                             record.Notes = value?.ToString();
@@ -93,10 +108,10 @@ namespace LonserviceMonitoring.Services
                     updateCmd.Transaction = transaction;
                     updateCmd.CommandText = @"
                         UPDATE CsvData 
-                        SET Contacted = @contacted, Notes = @notes 
+                        SET Confirmed = @confirmed, Notes = @notes 
                         WHERE Id = @id";
 
-                    updateCmd.Parameters.Add(new SqlParameter("@contacted", change.Contacted));
+                    updateCmd.Parameters.Add(new SqlParameter("@confirmed", change.Confirmed));
                     updateCmd.Parameters.Add(new SqlParameter("@notes", change.Notes ?? (object)DBNull.Value));
                     updateCmd.Parameters.Add(new SqlParameter("@id", change.Id));
 
@@ -125,7 +140,7 @@ namespace LonserviceMonitoring.Services
                 await _connection.OpenAsync();
 
             using var command = _connection.CreateCommand();
-            
+
             if (string.IsNullOrEmpty(searchTerm))
             {
                 command.CommandText = "SELECT TOP 1000 * FROM AuditLog ORDER BY Timestamp DESC";
@@ -205,7 +220,7 @@ namespace LonserviceMonitoring.Services
             command.CommandText = "SELECT TOP 1 * FROM CsvData";
 
             using var reader = await command.ExecuteReaderAsync();
-            
+
             for (int i = 0; i < reader.FieldCount; i++)
             {
                 columns.Add(reader.GetName(i));
@@ -213,5 +228,189 @@ namespace LonserviceMonitoring.Services
 
             return columns;
         }
+
+        public async Task<List<EmployeeList>> GetAllEmployeesAsync()
+        {
+            var employees = new List<EmployeeList>();
+
+            if (_connection.State != ConnectionState.Open)
+                await _connection.OpenAsync();
+
+            using var command = _connection.CreateCommand();
+            command.CommandText = @"
+                SELECT GUID, EmployeeID, FirstName, LastName, IsAdmin, IsActive 
+                FROM EmployeeList 
+                ORDER BY FirstName, LastName";
+
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                employees.Add(new EmployeeList
+                {
+                    GUID = reader.GetGuid("GUID"),
+                    EmployeeID = reader.IsDBNull("EmployeeID") ? "" : reader["EmployeeID"].ToString() ?? "",
+                    FirstName = reader.IsDBNull("FirstName") ? "" : reader.GetString("FirstName"),
+                    LastName = reader.IsDBNull("LastName") ? "" : reader.GetString("LastName"),
+                    IsAdmin = reader.IsDBNull("IsAdmin") ? false : reader.GetBoolean("IsAdmin"),
+                    IsActive = reader.IsDBNull("IsActive") ? false : reader.GetBoolean("IsActive")
+                });
+            }
+
+            return employees;
+        }
+
+        // All CRUD operations for CompanyDetails
+        public async Task<List<CompanyDetails>> GetAllCompanyDetailsAsync()
+        {
+            var companies = new List<CompanyDetails>();
+
+            if (_connection.State != ConnectionState.Open)
+                await _connection.OpenAsync();
+
+            using var command = _connection.CreateCommand();
+            command.CommandText = @"
+                SELECT Company, Assignee, ProcessedStatus, Created 
+                FROM CompanyDetails 
+                ORDER BY Company";
+
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                companies.Add(new CompanyDetails
+                {
+                    // CompanyID = reader.IsDBNull("CompanyID") ? 0 : Convert.ToInt32(reader["CompanyID"]),
+                    Company = reader.IsDBNull("Company") ? "" : reader["Company"].ToString() ?? "",
+                    Assignee = reader.IsDBNull("Assignee") ? 0 : Convert.ToInt32(reader["Assignee"]),
+                    ProcessedStatus = reader.IsDBNull("ProcessedStatus") ? "" : reader["ProcessedStatus"].ToString() ?? "",
+                    Created = reader["Created"] == DBNull.Value ? null : Convert.ToDateTime(reader["Created"])
+                });
+            }
+
+            return companies;
+        }
+
+        public async Task<List<CompanyDetails>> GetCompanyDetailsByNameAsync(string companyName)
+        {
+            var companies = new List<CompanyDetails>();
+
+            if (_connection.State != ConnectionState.Open)
+                await _connection.OpenAsync();
+
+            using var command = _connection.CreateCommand();
+            // command.CommandText = @"
+            //     SELECT Company, Assignee, ProcessedStatus, TotalRecords, ContactedRecords, Created
+            //     FROM CompanyDetails 
+            //     WHERE Company = @companyName";
+            command.CommandText = @"SELECT 
+                    cd.Company,
+                    cd.Assignee,
+                    el.FirstName + ' ' + el.LastName AS AssigneeName,
+                    cd.ProcessedStatus,
+                    cd.Created
+                FROM CompanyDetails cd
+                LEFT JOIN EmployeeList el 
+                    ON cd.Assignee = el.EmployeeID
+                WHERE cd.Company = @companyName
+                ORDER BY cd.Created DESC";
+
+
+            command.Parameters.Add(new SqlParameter("@companyName", companyName));
+
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                companies.Add(new CompanyDetails
+                {
+                    Company = reader.IsDBNull("Company") ? "" : reader["Company"].ToString() ?? "",
+                    Assignee = reader.IsDBNull("Assignee") ? 0 : Convert.ToInt32(reader["Assignee"]),
+                    AssigneeName = reader.IsDBNull("AssigneeName") ? "" : reader["AssigneeName"].ToString() ?? "",
+                    ProcessedStatus = reader.IsDBNull("ProcessedStatus") ? "" : reader["ProcessedStatus"].ToString() ?? "",
+                    Created = reader["Created"] == DBNull.Value ? null : Convert.ToDateTime(reader["Created"]),
+
+                });
+            }
+
+            return companies;
+        }
+
+        public async Task<int> InsertCompanyDetailsAsync(CompanyDetails company)
+        {
+            try
+            {
+                if (_connection.State != ConnectionState.Open)
+                    await _connection.OpenAsync();
+
+                // Check if a record with the same company name exists
+                bool recordExists = false;
+                CompanyDetails existing = null;
+                
+                using (var checkCommand = _connection.CreateCommand())
+                {
+                    checkCommand.CommandText = @"
+                        SELECT TOP 1 Company, Assignee, ProcessedStatus
+                        FROM CompanyDetails
+                        WHERE Company = @company
+                        ORDER BY Created DESC";
+                    checkCommand.Parameters.Add(new SqlParameter("@company", company.Company));
+
+                    using var reader = await checkCommand.ExecuteReaderAsync();
+                    if (await reader.ReadAsync())
+                    {
+                        recordExists = true;
+                        existing = new CompanyDetails
+                        {
+                            Company = reader.IsDBNull("Company") ? null : reader.GetString("Company"),
+                            Assignee = reader.IsDBNull("Assignee") ? null : reader.GetInt32("Assignee"),
+                            ProcessedStatus = reader.IsDBNull("ProcessedStatus") ? null : reader.GetString("ProcessedStatus")
+                        };
+                    }
+                }
+
+                int rowsAffected = 0;
+
+                if (recordExists)
+                {
+                    // Update existing record
+                    using var updateCommand = _connection.CreateCommand();
+                    updateCommand.CommandText = @"
+                        UPDATE CompanyDetails 
+                        SET Assignee = @assignee, 
+                            ProcessedStatus = @processedStatus,
+                            Created = GETDATE()
+                        WHERE Company = @company";
+
+                    // Use provided values or keep existing ones if new values are null/empty
+                    var assigneeToUpdate = company.Assignee ?? existing?.Assignee;
+                    var statusToUpdate = string.IsNullOrEmpty(company.ProcessedStatus) ? existing?.ProcessedStatus : company.ProcessedStatus;
+
+                    updateCommand.Parameters.Add(new SqlParameter("@company", company.Company));
+                    updateCommand.Parameters.Add(new SqlParameter("@assignee", (object?)assigneeToUpdate ?? DBNull.Value));
+                    updateCommand.Parameters.Add(new SqlParameter("@processedStatus", (object?)statusToUpdate ?? DBNull.Value));
+
+                    rowsAffected = await updateCommand.ExecuteNonQueryAsync();
+                }
+                else
+                {
+                    // Insert new record
+                    using var insertCommand = _connection.CreateCommand();
+                    insertCommand.CommandText = @"
+                        INSERT INTO CompanyDetails (Company, Assignee, ProcessedStatus)
+                        VALUES (@company, @assignee, @processedStatus)";
+
+                    insertCommand.Parameters.Add(new SqlParameter("@company", company.Company));
+                    insertCommand.Parameters.Add(new SqlParameter("@assignee", (object?)company.Assignee ?? DBNull.Value));
+                    insertCommand.Parameters.Add(new SqlParameter("@processedStatus", (object?)company.ProcessedStatus ?? DBNull.Value));
+
+                    rowsAffected = await insertCommand.ExecuteNonQueryAsync();
+                }
+
+                return rowsAffected > 0 ? 1 : 0; // Return 1 for success, 0 for failure
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error upserting company details: {ex.Message}");
+                throw;
+            }
+        }                
     }
 }
