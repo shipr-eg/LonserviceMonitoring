@@ -15,6 +15,7 @@ let allDatabaseColumns = [];
 let systemColumns = [];
 let essentialColumns = [];
 let dashboardConfig = null;
+const statusOptions = ["Not Started", "In Progress", "Waiting", "Processed"];
 
 // Toast management
 const saveToast = new bootstrap.Toast(document.getElementById("saveToast"), {
@@ -84,11 +85,11 @@ async function loadDashboardConfiguration() {
       "modifieddate",
       "sourcefilename",
       "timeblock",
-      "contacted",
+      "confirmed",
       "notes",
       "company",
     ];
-    essentialColumns = ["contacted", "notes", "company"];
+    essentialColumns = ["confirmed", "notes", "company"];
     showError("Using default configuration due to configuration load error.");
   }
 }
@@ -112,11 +113,13 @@ async function initializeDashboard() {
     if (!employeeResponse.ok) throw new Error("Failed to fetch data");
     employeesLists = await employeeResponse.json();
 
+    createCompanyFilter();
+
     // Initialize column visibility settings
     initializeColumnVisibility();
 
     processAndDisplayData();
-
+    filterCompanyBasedOnStatusnAssignee(statusOptions[0], null);
     showLoading(false);
   } catch (error) {
     console.error("Error initializing dashboard:", error);
@@ -164,9 +167,19 @@ function renderGroupedData() {
   const container = document.getElementById("dataContainer");
   container.innerHTML = "";
 
+  if (Object.keys(groupedData).length === 0) {
+    container.innerHTML = `
+      <div class="alert alert-warning text-center py-5 my-4" role="alert">
+        <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
+        <h2 class="fw-bold mb-3">No Data Available</h2>
+        <p class="lead mb-0">There are currently no records to display. Please check your filters or try refreshing the page.</p>
+      </div>
+    `;
+    return;
+  }
+
   // Get all column names dynamically
   const columns = getColumnNames();
-
   Object.keys(groupedData)
     .sort()
     .forEach((company) => {
@@ -174,7 +187,8 @@ function renderGroupedData() {
       const groupElement = createCompanyGroup(company, groupData, columns);
       container.appendChild(groupElement);
 
-      // Apply default contacted filter after DOM is ready
+      // Apply default confirmed filter after DOM is ready
+
       setTimeout(() => {
         applyGroupFilters(company);
       }, 0);
@@ -195,7 +209,7 @@ function getColumnNames() {
   // Return only visible columns
   const visibleColumns = getVisibleColumns();
 
-  // Put Contacted and Notes at the beginning, then Company, then all other visible columns
+  // Put Confirmed and Notes at the beginning, then Company, then all other visible columns
   const specialColumns = essentialColumns.map((col) => col.toLowerCase());
   const remainingColumns = visibleColumns.filter(
     (col) => !specialColumns.includes(col.toLowerCase())
@@ -219,6 +233,72 @@ function getColumnNames() {
 
   return finalOrder;
 }
+// Create Company filter
+function createCompanyFilter() {
+  const filterContainer = document.getElementById("dataFilter");
+
+  const companyFilterElemnts = `
+    <div class="row">
+      <div class="col-md-12">
+          <div class="card border-0">
+              <div class="card-body py-1">
+                  <div class="row align-items-center">
+                      <div class="col-md-3">
+                          <div class="d-flex align-items-center">
+                            <label class="form-label mb-1 fw-bold text-primary me-2">
+                                Status:
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-primary text-white border-0 ">
+                                    <i class="fas fa-clipboard-list"></i>
+                                </span>
+                                <select id="statusFilter" class="form-select border-0 shadow-sm" 
+                                        style="min-width: 150px;" 
+                                        onchange="filterCompanyBasedOnStatusnAssignee(this.value, getCurrentAssigneeFilter())">
+                                    ${statusOptions
+                                      .map(
+                                        (status) =>
+                                          `<option ${
+                                            status === statusOptions[0]
+                                              ? "selected"
+                                              : ""
+                                          } value="${status}">${status}</option>`
+                                      )
+                                      .join("")}
+                                </select>
+                            </div>
+                          </div>
+                      </div>
+                      <div class="col-md-4">
+                          <div class="d-flex align-items-center">
+                              <label class="form-label mb-1 fw-bold text-success me-2">
+                                  Assignee:
+                              </label>
+                              <div class="input-group input-group-sm">
+                                  <span class="input-group-text bg-success text-white border-0">
+                                      <i class="fas fa-user"></i>
+                                  </span>
+                                  <select id="assigneeFilter" class="form-select border-0 shadow-sm" 
+                                          style="min-width: 180px;" 
+                                          onchange="filterCompanyBasedOnStatusnAssignee(getCurrentStatusFilter(), this.value)">  
+                                      <option value=""> Select Assignee</option>
+                                      ${employeesLists
+                                        .map(
+                                          (emp) =>
+                                            `<option value="${emp.fullName}"> ${emp.fullName}</option>`
+                                        )
+                                        .join("")}
+                                  </select>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+        </div>
+    </div>`;
+  filterContainer.innerHTML = companyFilterElemnts;
+}
 
 // Create company group
 function createCompanyGroup(company, data, columns) {
@@ -226,23 +306,11 @@ function createCompanyGroup(company, data, columns) {
   groupDiv.className = "company-group";
   groupDiv.id = `group-${company.replace(/\s+/g, "-")}`;
 
-  const contactedCount = data.filter((r) => r.contacted).length;
-  const notContactedCount = data.length - contactedCount;
+  const confirmedCount = data.filter((r) => r.confirmed).length;
+  const notConfirmedCount = data.length - confirmedCount;
   const companyId = company.replace(/\s+/g, "-").toLowerCase();
   const assignee = data[0].assigneeName || "Unassigned";
   const processedStatus = data[0].processedStatus || "Not Started";
-  const statusOptions = ["Not Started", "In Progress", "Waiting", "Processed"];
-
-  // const status = data[0].status || "Unassigned";
-
-  // Find the employee ID that matches the assignee name
-  // const selectedEmployee = employeesLists.find(
-  //   (emp) => emp.fullName === data[0].assigneeName
-  // );
-  // const selectedEmployeeId = selectedEmployee
-  //   ? selectedEmployee.employeeID
-  //   : "";
-
   groupDiv.innerHTML = `
         <div class="group-header" 
              onclick="toggleCompanyAccordion('${companyId}')"
@@ -254,16 +322,16 @@ function createCompanyGroup(company, data, columns) {
                         ${company}
                     </h3>
                     <div class="d-flex gap-3">
-                        <span class="badge bg-light text-dark">
+                        <span class="badge bg-light text-dark company-badge">
                             Total: <span id="total-${company}">${
     data.length
   }</span>
                         </span>
-                        <span class="badge bg-success">
-                            Confirmed: <span id="contacted-${company}">${contactedCount}</span>
+                        <span class="badge bg-success company-badge">
+                            Confirmed: <span id="confirmed-${company}">${confirmedCount}</span>
                         </span>
-                        <span class="badge bg-warning text-dark">
-                            Not confirmed: <span id="not-contacted-${company}">${notContactedCount}</span>
+                        <span class="badge bg-warning text-dark company-badge">
+                            Not confirmed: <span id="not-confirmed-${company}">${notConfirmedCount}</span>
                         </span> 
                         <label>Assignee:</label>
                         <select id="employee-select-${companyId}" class="form-select form-select-sm" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', this.value, null)">
@@ -290,10 +358,6 @@ function createCompanyGroup(company, data, columns) {
                           )
                           .join("")}  
                         </select>
-                        <button class="btn btn-sm " onclick="showCompanyHistory('${company}', event)">
-                            <i class="fas fa-history text-white"></i>
-                        </button>
-
                     </div>
                 </div>
                 <div class="collapse-icon">
@@ -397,7 +461,7 @@ function getColumnWidth(columnName) {
   switch (columnName.toLowerCase()) {
     case "notes":
       return "250px";
-    case "contacted":
+    case "confirmed":
       return "100px";
     case "company":
       return "150px";
@@ -420,7 +484,7 @@ function formatColumnName(columnName) {
 function createColumnFilter(columnName, company) {
   const filterId = `filter-${company}-${columnName}`;
 
-  if (columnName.toLowerCase() === "contacted") {
+  if (columnName.toLowerCase() === "confirmed") {
     return `
             <select class="filter-input active-filter" id="${filterId}" onchange="filterByColumn('${company}', '${columnName}', this.value)">
                 <option value="">All</option>
@@ -456,13 +520,13 @@ function renderTableRows(data, columns, company) {
 function renderTableCell(record, columnName, company) {
   const value = getRecordValue(record, columnName);
 
-  if (columnName.toLowerCase() === "contacted") {
+  if (columnName.toLowerCase() === "confirmed") {
     return `
             <td>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" 
                            ${value ? "checked" : ""} 
-                           onchange="updateContactedStatus('${
+                           onchange="updateConfirmedStatus('${
                              record.id
                            }', this.checked)">
                 </div>
@@ -670,37 +734,37 @@ function changePageSize(company, newSize) {
   window.companyPagination[company] = 1;
 }
 
-// Update contacted status
-function updateContactedStatus(recordId, isContacted) {
+// Update confirmed status
+function updateConfirmedStatus(recordId, isConfirmed) {
   const record = allData.find((r) => r.id === recordId);
   if (record) {
     // Store original value if this is the first change for this record
     if (!originalValues.has(recordId)) {
       originalValues.set(recordId, {
-        contacted: record.contacted,
+        confirmed: record.confirmed,
         notes: record.notes,
       });
     }
 
-    record.contacted = isContacted;
+    record.confirmed = isConfirmed;
 
     const original = originalValues.get(recordId);
 
     // Check if current values match original values
-    const contactedChanged = record.contacted !== original.contacted;
+    const confirmedChanged = record.confirmed !== original.confirmed;
     const notesChanged = record.notes !== original.notes;
 
-    if (contactedChanged || notesChanged) {
+    if (confirmedChanged || notesChanged) {
       // There are actual changes, track them
       if (!pendingChanges.has(recordId)) {
         pendingChanges.set(recordId, { ...record });
       }
-      pendingChanges.get(recordId).contacted = isContacted;
+      pendingChanges.get(recordId).confirmed = isConfirmed;
     } else {
       // No actual changes, remove from pending changes
       pendingChanges.delete(recordId);
       // If no changes at all, also remove from original values
-      if (!contactedChanged && !notesChanged) {
+      if (!confirmedChanged && !notesChanged) {
         originalValues.delete(recordId);
       }
     }
@@ -720,7 +784,7 @@ function updateNotes(recordId, notes) {
     // Store original value if this is the first change for this record
     if (!originalValues.has(recordId)) {
       originalValues.set(recordId, {
-        contacted: record.contacted,
+        confirmed: record.confirmed,
         notes: record.notes,
       });
     }
@@ -730,10 +794,10 @@ function updateNotes(recordId, notes) {
     const original = originalValues.get(recordId);
 
     // Check if current values match original values
-    const contactedChanged = record.contacted !== original.contacted;
+    const confirmedChanged = record.confirmed !== original.confirmed;
     const notesChanged = record.notes !== original.notes;
 
-    if (contactedChanged || notesChanged) {
+    if (confirmedChanged || notesChanged) {
       // There are actual changes, track them
       if (!pendingChanges.has(recordId)) {
         pendingChanges.set(recordId, { ...record });
@@ -812,8 +876,6 @@ async function saveAllChanges() {
     // Clear pending changes and original values
     pendingChanges.clear();
     originalValues.clear();
-    removeContactedCompany();
-
     // Hide toast after success
     setTimeout(() => {
       saveToast.hide();
@@ -827,18 +889,6 @@ async function saveAllChanges() {
     saveButton.textContent = originalText;
   }
 }
-
-removeContactedCompany = () => {
-  Object.keys(groupedData).forEach((c) => {
-    const data = groupedData[c];
-    const contactedCount = data.filter((r) => r.contacted).length;
-    const groupElement = `group-${c.replace(/\s+/g, "-")}`;
-    if (contactedCount === data.length) {
-      document.getElementById(groupElement).remove();
-      delete groupedData[c];
-    }
-  });
-};
 
 // Filter functions
 function performGlobalSearch() {
@@ -860,6 +910,47 @@ function performGlobalSearch() {
   });
 
   // Regroup and display
+  groupedData = groupDataByCompany(filteredData);
+  renderGroupedData();
+}
+
+// Helper functions to get current filter values
+function getCurrentStatusFilter() {
+  const statusFilter = document.getElementById("statusFilter");
+  return statusFilter ? statusFilter.value : null;
+}
+
+function getCurrentAssigneeFilter() {
+  const assigneeFilter = document.getElementById("assigneeFilter");
+  return assigneeFilter && assigneeFilter.value !== ""
+    ? assigneeFilter.value
+    : null;
+}
+
+// perform Assignment or Status change
+function filterCompanyBasedOnStatusnAssignee(processedStatus, assignee) {
+  const filteredData = allData.filter((record) => {
+    // If in case of both values provided Status and assignee
+    if (processedStatus && assignee) {
+      return (
+        record.processedStatus === processedStatus &&
+        record.assigneeName === assignee
+      );
+    }
+    // If in case of only stuatus
+    else if (processedStatus) {
+      return record.processedStatus === processedStatus;
+    }
+    // If in case of only assignee
+    else if (assignee) {
+      return record.assigneeName === assignee;
+    }
+    // rest case
+    else {
+      return true;
+    }
+  });
+  // Update the display with filtered data
   groupedData = groupDataByCompany(filteredData);
   renderGroupedData();
 }
@@ -904,10 +995,10 @@ function applyGroupFilters(company, groupSearch = "") {
     if (filterInput && filterInput.value) {
       const filterValue = filterInput.value.toLowerCase();
 
-      if (col.toLowerCase() === "contacted") {
+      if (col.toLowerCase() === "confirmed") {
         const boolValue = filterValue === "true";
         filteredData = filteredData.filter(
-          (record) => record.contacted === boolValue
+          (record) => record.confirmed === boolValue
         );
       } else {
         filteredData = filteredData.filter((record) => {
@@ -922,22 +1013,31 @@ function applyGroupFilters(company, groupSearch = "") {
   const pageSize = getPageSize(company);
   const tableBody = document.getElementById(`table-body-${company}`);
   const columns_list = getColumnNames();
-  tableBody.innerHTML = renderTableRows(
-    filteredData.slice(0, pageSize),
-    columns_list,
-    company
-  );
+
+  if (tableBody) {
+    tableBody.innerHTML = renderTableRows(
+      filteredData.slice(0, pageSize),
+      columns_list,
+      company
+    );
+  }
 
   // Update pagination
   const pagination = document.getElementById(`pagination-${company}`);
-  pagination.innerHTML = createPagination(company, filteredData.length, 1);
+  if (pagination) {
+    pagination.innerHTML = createPagination(company, filteredData.length, 1);
+  }
 
   // Update counts
   const filteredCount = document.getElementById(`filtered-count-${company}`);
   const showing = document.getElementById(`showing-${company}`);
 
-  filteredCount.textContent = filteredData.length;
-  showing.textContent = `1-${Math.min(pageSize, filteredData.length)}`;
+  if (filteredCount) {
+    filteredCount.textContent = filteredData.length;
+  }
+  if (showing) {
+    showing.textContent = `1-${Math.min(pageSize, filteredData.length)}`;
+  }
 
   // Reset current page for this company
   if (!window.companyPagination) window.companyPagination = {};
@@ -957,10 +1057,10 @@ function getFilteredData(company) {
     if (filterInput && filterInput.value) {
       const filterValue = filterInput.value.toLowerCase();
 
-      if (col.toLowerCase() === "contacted") {
+      if (col.toLowerCase() === "confirmed") {
         const boolValue = filterValue === "true";
         filteredData = filteredData.filter(
-          (record) => record.contacted === boolValue
+          (record) => record.confirmed === boolValue
         );
       } else {
         filteredData = filteredData.filter((record) => {
@@ -996,11 +1096,9 @@ function clearGroupFilters(company) {
 
 function clearAllFilters() {
   document.getElementById("globalSearch").value = "";
-
   Object.keys(groupedData).forEach((company) => {
     clearGroupFilters(company);
   });
-
   processAndDisplayData();
 }
 
@@ -1008,19 +1106,19 @@ function clearAllFilters() {
 function updateSummaryCounts() {
   Object.keys(groupedData).forEach((company) => {
     const data = groupedData[company];
-    const contactedCount = data.filter((r) => r.contacted).length;
-    const notContactedCount = data.length - contactedCount;
+    const confirmedCount = data.filter((r) => r.confirmed).length;
+    const notConfirmedCount = data.length - confirmedCount;
 
     const totalElement = document.getElementById(`total-${company}`);
-    const contactedElement = document.getElementById(`contacted-${company}`);
-    const notContactedElement = document.getElementById(
-      `not-contacted-${company}`
+    const confirmedElement = document.getElementById(`confirmed-${company}`);
+    const notConfirmedElement = document.getElementById(
+      `not-confirmed-${company}`
     );
 
     if (totalElement) totalElement.textContent = data.length;
-    if (contactedElement) contactedElement.textContent = contactedCount;
-    if (notContactedElement)
-      notContactedElement.textContent = notContactedCount;
+    if (confirmedElement) confirmedElement.textContent = confirmedCount;
+    if (notConfirmedElement)
+      notConfirmedElement.textContent = notConfirmedCount;
   });
 }
 
@@ -1032,7 +1130,6 @@ function handleEmployeeSelection(
 ) {
   if (company) {
     const companyObj = { company, assignee, processedStatus };
-    console.log(companyObj);
     addNewCompanyDetails(companyObj);
   }
 }
@@ -1050,12 +1147,30 @@ function addNewCompanyDetails(companyObj) {
       return response.json();
     })
     .then((data) => {
+      updateAllDataBasedOnCompanyUpdate(companyObj);
       showToast("added successfully!", "success");
     })
     .catch((error) => {
       showError("Error adding company assignee", "error");
     });
 }
+
+// Update All Data based on the new company update
+function updateAllDataBasedOnCompanyUpdate(companyObj) {
+  allData
+    .filter((record) => record.company === companyObj.company)
+    .forEach((record) => {
+      if (companyObj.processedStatus) {
+        record.processedStatus = companyObj.processedStatus;
+      } else if (companyObj.assignee) {
+        const assignee = employeesLists.find(
+          (emp) => emp.employeeID === companyObj.assignee
+        );
+        record.assigneeName = assignee ? assignee.fullName : null;
+      }
+    });
+}
+
 // Admin functions
 function toggleAdminView() {
   const modal = new bootstrap.Modal(document.getElementById("adminModal"));
@@ -1539,73 +1654,6 @@ function showToast(message, type = "info") {
     .addEventListener("hidden.bs.toast", function () {
       this.remove();
     });
-}
-
-// Company History Functions
-async function showCompanyHistory(company, event) {
-  // Stop event propagation
-  event.stopPropagation();
-
-  try {
-    // Show loading state
-    const modal = new bootstrap.Modal(
-      document.getElementById("companyHistoryModal")
-    );
-    const modalTitle = document.getElementById("companyHistoryModalTitle");
-    const tableBody = document.getElementById("companyHistoryTableBody");
-    const loadingDiv = document.getElementById("companyHistoryLoading");
-    const tableDiv = document.getElementById("companyHistoryTable");
-
-    // Set modal title
-    modalTitle.textContent = `History for ${company}`;
-
-    // Show loading state
-    loadingDiv.style.display = "block";
-    tableDiv.style.display = "none";
-
-    // Show modal
-    modal.show();
-
-    // Call REST API
-    const response = await fetch(
-      `/api/data/companies/${encodeURIComponent(company)}`
-    );
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Hide loading and show table
-    loadingDiv.style.display = "none";
-    tableDiv.style.display = "block";
-
-    // Populate table
-    populateCompanyHistoryTable(data, tableBody);
-  } catch (error) {
-    console.error("Error fetching company history:", error);
-    showError(`Failed to load history for ${company}. Please try again.`);
-
-    // Hide loading and show table with error message
-    const loadingDiv = document.getElementById("companyHistoryLoading");
-    const tableDiv = document.getElementById("companyHistoryTable");
-    const tableBody = document.getElementById("companyHistoryTableBody");
-
-    if (loadingDiv) loadingDiv.style.display = "none";
-    if (tableDiv) tableDiv.style.display = "block";
-
-    // Show "No records found" message in the table
-    if (tableBody) {
-      tableBody.innerHTML = `
-        <tr>
-          <td colspan="5" class="text-center text-muted py-4">
-            <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
-            No history records found for this company.
-          </td>
-        </tr>
-      `;
-    }
-  }
 }
 
 function populateCompanyHistoryTable(data, tableBody) {

@@ -24,6 +24,7 @@ namespace LonserviceMonitoring.Controllers
             try
             {
                 var data = await _dataService.GetAllDataAsync();
+                data.ForEach(d => d.ProcessedStatus = d.ProcessedStatus ?? "Not Started");
                 return Ok(data);
             }
             catch (Exception ex)

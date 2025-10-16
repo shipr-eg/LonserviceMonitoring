@@ -8,13 +8,10 @@ namespace LonserviceMonitoring.Models
         public Guid Id { get; set; }
         public string? Company { get; set; }
         public DateTime CreatedDate { get; set; }
-        public bool Contacted { get; set; }
+        public bool Confirmed { get; set; }
         public string? Notes { get; set; }
         public string? AssigneeName { get; set; }
         public string? ProcessedStatus { get; set; }
-        
-        // public int? Assignee { get; set; }
-
         // Dynamic properties for additional columns
         public Dictionary<string, object> AdditionalProperties { get; set; } = new();
     }
