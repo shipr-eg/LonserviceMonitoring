@@ -238,66 +238,44 @@ function createCompanyFilter() {
   const filterContainer = document.getElementById("dataFilter");
 
   const companyFilterElemnts = `
-    <div class="row">
-      <div class="col-md-12">
-          <div class="card border-0">
-              <div class="card-body py-1">
-                  <div class="row align-items-center">
-                      <div class="col-md-3">
-                          <div class="d-flex align-items-center">
-                            <label class="form-label mb-1 fw-bold text-primary me-2">
-                                Status:
-                            </label>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text bg-primary text-white border-0 ">
-                                    <i class="fas fa-clipboard-list"></i>
-                                </span>
-                                <select id="statusFilter" class="form-select border-0 shadow-sm" 
-                                        style="min-width: 150px;" 
-                                        onchange="filterCompanyBasedOnStatusnAssignee(this.value, getCurrentAssigneeFilter())">
-                                    ${statusOptions
-                                      .map(
-                                        (status) =>
-                                          `<option ${
-                                            status === statusOptions[0]
-                                              ? "selected"
-                                              : ""
-                                          } value="${status}">${status}</option>`
-                                      )
-                                      .join("")}
-                                </select>
-                            </div>
-                          </div>
-                      </div>
-                      <div class="col-md-4">
-                          <div class="d-flex align-items-center">
-                              <label class="form-label mb-1 fw-bold text-success me-2">
-                                  Assignee:
-                              </label>
-                              <div class="input-group input-group-sm">
-                                  <span class="input-group-text bg-success text-white border-0">
-                                      <i class="fas fa-user"></i>
-                                  </span>
-                                  <select id="assigneeFilter" class="form-select border-0 shadow-sm" 
-                                          style="min-width: 180px;" 
-                                          onchange="filterCompanyBasedOnStatusnAssignee(getCurrentStatusFilter(), this.value)">  
-                                      <option value=""> Select Assignee</option>
-                                      ${employeesLists
-                                        .map(
-                                          (emp) =>
-                                            `<option value="${emp.fullName}"> ${emp.fullName}</option>`
-                                        )
-                                        .join("")}
-                                  </select>
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-              </div>
+  <div class="row">
+      <div class="col-6">
+          <div class="input-group">
+              <span class="input-group-text input-group-sm">
+                  <i class="fas fa-filter"></i>
+              </span>
+              <select id="statusFilter" class="form-control form-select input-sm" onchange="filterCompanyBasedOnStatusnAssignee(this.value, getCurrentAssigneeFilter())">
+                  ${statusOptions
+                    .map(
+                      (status) =>
+                        `<option ${
+                          status === statusOptions[0] ? "selected" : ""
+                        } value="${status}">${status}</option>`
+                    )
+                    .join("")}
+              </select>
           </div>
-        </div>
-    </div>`;
-  filterContainer.innerHTML = companyFilterElemnts;
+      </div>
+      <div class="col-6 ps-0">
+          <div class="input-group">
+              <span class="input-group-text input-group-sm">
+                  <i class="fas fa-tags"></i>
+              </span>
+              <select id="assigneeFilter" class="form-control form-select input-sm" onchange="filterCompanyBasedOnStatusnAssignee(getCurrentStatusFilter(), this.value)">
+                  <option value=""> Select Assignee</option>
+                  ${employeesLists
+                    .map(
+                      (emp) =>
+                        `<option value="${emp.fullName}"> ${emp.fullName}</option>`
+                    )
+                    .join("")}
+              </select>
+          </div>
+      </div>
+  </div>`;
+  if (filterContainer) {
+    filterContainer.innerHTML = companyFilterElemnts;
+  }
 }
 
 // Create company group
