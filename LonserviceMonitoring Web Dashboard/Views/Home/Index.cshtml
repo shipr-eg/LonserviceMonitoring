@@ -7,6 +7,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+    body{
+        background-color: #f0f2f5;
+    }
     .toast-container {
             position: fixed;
             bottom: 20px;
@@ -83,22 +86,24 @@
         }
         
         .company-group {
-            margin-bottom: 2rem;
+            margin-bottom: 4px;
         }
         
         .group-header {
-            background: linear-gradient(135deg, #0d6efd, #6610f2);
-            color: white;
+            /*background: linear-gradient(135deg, #0d6efd, #6610f2);*/
+            background: transparent;
+            color: #000000bf;
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 0px;
             margin-bottom: 0;
             cursor: pointer;
             transition: all 0.3s ease;
             user-select: none;
+            border-bottom: 1px solid #979797;
         }
         
         .group-header:hover {
-            background: linear-gradient(135deg, #0b5ed7, #5a0fc8);
+            background: lightgray;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
@@ -125,9 +130,7 @@
         }
         
         .search-controls {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
+            padding: 4px 13px;
         }
         
         .filter-row {
@@ -283,7 +286,7 @@
         <!-- Header -->
         <div class="row mb-4">
             <div class="col-12">
-                <h1 class="display-4 text-center text-primary">
+                <h1 class="display-6 text-center text-primary">
                     <i class="fas fa-chart-line me-3"></i>
                     Lønservice Monitoring Dashboard
                 </h1>
@@ -291,34 +294,42 @@
         </div>
 
         <!-- Global Search -->
-        <div class="search-controls mb-2">
+        <div class="search-controls mb-2 py-1">
             <div class="row">
-                <div class="col-md-5">
+                <div class="col-md-4 p-0">
+                    <div id="dataFilter" class="mb-3"></div> 
+                </div>
+                <div class="col-md-3">
                     <div class="input-group">
-                        <span class="input-group-text">
+                        <span class="input-group-text input-group-sm">
                             <i class="fas fa-search"></i>
                         </span>
-                        <input type="text" id="globalSearch" class="form-control" 
+                        <input type="text" id="globalSearch" class="form-control input-sm" 
                                placeholder="Global search across all data...">
                     </div>
                 </div>
-                <div class="col-md-7">
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-outline-primary" onclick="expandAllGroups()">
-                            <i class="fas fa-expand-alt me-1"></i> Expand All
-                        </button>
-                        <button class="btn btn-outline-primary" onclick="collapseAllGroups()">
-                            <i class="fas fa-compress-alt me-1"></i> Collapse All
-                        </button>
-                        <button class="btn btn-outline-info" onclick="showColumnVisibilityModal()">
-                            <i class="fas fa-columns me-1"></i> Columns
-                        </button>
-                        <button class="btn btn-outline-primary">
-                             <i class="fas fa-history"></i> History
-                        </button>
-                        <button class="btn btn-outline-secondary" onclick="clearAllFilters()">
+                <div class="col-md-5">
+                    <div class="d-flex gap-2 mt-1">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clearAllFilters()">
                             <i class="fas fa-times me-1"></i> Clear Filters
                         </button>
+
+                        <button class="btn btn-sm btn-outline-primary ms-auto">
+                             <i class="fas fa-history"></i>
+                        </button>
+
+                        <button class="btn btn-sm btn-outline-primary" data-toggle="tooltip" data-placement="top" title="Expand All" onclick="expandAllGroups()">
+                            <i class="fas fa-expand-alt me-1"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" data-toggle="tooltip" data-placement="top" title="Collapse All" onclick="collapseAllGroups()">
+                            <i class="fas fa-compress-alt me-1"></i>
+                        </button>
+                        <!--
+                        <button class="btn btn-sm btn-outline-info" onclick="showColumnVisibilityModal()">
+                            <i class="fas fa-columns me-1"></i> Columns
+                        </button>
+                        -->
+                        
                     </div>
                 </div>
             </div>
@@ -332,7 +343,7 @@
         </div>
         
         <!-- Data filter -->
-        <div id="dataFilter" class="mb-3"></div>
+        <!-- <div id="dataFilter" class="mb-3"></div> -->
         <!-- Data Container -->
         <div id="dataContainer" style="display: none;">
             <!-- Company groups will be dynamically generated here -->
