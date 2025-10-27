@@ -295,24 +295,28 @@ function createCompanyGroup(company, data, columns) {
              style="cursor: pointer;">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h3 class="mb-1">
-                        <i class="fas fa-building me-2"></i>
-                        ${company}
-                    </h3>
                     <div class="d-flex gap-3">
-                        <span class="badge bg-light text-dark company-badge">
-                            Total: <span id="total-${company}">${
-    data.length
-  }</span>
+                        <div style="min-width: 240px;">
+                          <strong style="font-size: 1.1rem;">${company}</strong>
+                        </div>
+                        <span >
+                          <span class="badge bg-light text-dark">
+                              Total: 
+                              <span id="total-${company}">${data.length}</span>
+                          </span>
                         </span>
-                        <span class="badge bg-success company-badge">
-                            Confirmed: <span id="confirmed-${company}">${confirmedCount}</span>
+                        <span>
+                          <span class="badge bg-success">
+                              Confirmed: <span id="confirmed-${company}">${confirmedCount}</span>
+                          </span>
                         </span>
-                        <span class="badge bg-warning text-dark company-badge">
-                            Not confirmed: <span id="not-confirmed-${company}">${notConfirmedCount}</span>
-                        </span> 
+                        <span>
+                          <span class="badge bg-warning text-dark">
+                              Not confirmed: <span id="not-confirmed-${company}">${notConfirmedCount}</span>
+                          </span> 
+                        </span>
                         <label>Assignee:</label>
-                        <select id="employee-select-${companyId}" class="form-select form-select-sm" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', this.value, null)">
+                        <select id="employee-select-${companyId}" class="form-select form-select-sm bg-secondary text-white" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', this.value, null)">
                             <option value="">Select Employee</option>
                             ${employeesLists
                               .map(
@@ -324,7 +328,7 @@ function createCompanyGroup(company, data, columns) {
                               .join("")}
                         </select>
                         <label>Status:</label>
-                        <select id="status-select-${companyId}" class="form-select form-select-sm" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', null, this.value)" >
+                        <select id="status-select-${companyId}" class="form-select form-select-sm bg-secondary text-white" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', null, this.value)" >
                         <option value="">Select Status</option>    
                         ${statusOptions
                           .map(
