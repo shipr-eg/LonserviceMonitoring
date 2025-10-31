@@ -66,7 +66,7 @@ namespace LonserviceMonitoring
 
                 var host = builder.Build();
 
-                // Ensure database is created and migrated
+                // Ensure database is created and properly initialized
                 using (var scope = host.Services.CreateScope())
                 {
                     var context = scope.ServiceProvider.GetRequiredService<LonserviceContext>();
@@ -74,9 +74,24 @@ namespace LonserviceMonitoring
                     
                     try
                     {
-                        logger.LogInformation("Ensuring database is created...");
-                        await context.Database.EnsureCreatedAsync();
-                        logger.LogInformation("Database initialization completed");
+                        logger.LogInformation("Initializing database for LonserviceMonitoring...");
+                        
+                        // Ensure database exists (creates if not exists)
+                        var created = await context.Database.EnsureCreatedAsync();
+                        if (created)
+                        {
+                            logger.LogInformation("✅ Database created successfully: LonserviceMonitoringDB");
+                        }
+                        else
+                        {
+                            logger.LogInformation("✅ Database already exists: LonserviceMonitoringDB");
+                        }
+                        
+                        // Verify all required tables exist by checking each DbSet
+                        await VerifyDatabaseTablesAsync(context, logger);
+                        
+                        logger.LogInformation("✅ Database initialization completed successfully");
+                        logger.LogInformation("📊 Database ready for CSV processing with semicolon delimiter support");
                     }
                     catch (Exception ex)
                     {
@@ -117,6 +132,48 @@ namespace LonserviceMonitoring
             {
                 Log.Information("Cleaning up and closing logs...");
                 await Log.CloseAndFlushAsync();
+            }
+        }
+
+        private static async Task VerifyDatabaseTablesAsync(LonserviceContext context, Microsoft.Extensions.Logging.ILogger<Program> logger)
+        {
+            try
+            {
+                // Verify each table exists by attempting to count records
+                var tables = new Dictionary<string, Func<Task<int>>>
+                {
+                    ["CsvData"] = async () => await context.CsvData.CountAsync(),
+                    ["ProcessingLogs"] = async () => await context.ProcessingLogs.CountAsync(),
+                    ["AuditLogs"] = async () => await context.AuditLogs.CountAsync(),
+                    ["CsvProcessingHistory"] = async () => await context.CsvProcessingHistory.CountAsync()
+                };
+
+                logger.LogInformation("🔍 Verifying database tables...");
+
+                foreach (var table in tables)
+                {
+                    try
+                    {
+                        var count = await table.Value();
+                        logger.LogInformation("✅ Table '{TableName}' verified - {RecordCount} records", table.Key, count);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError("❌ Table '{TableName}' verification failed: {Error}", table.Key, ex.Message);
+                        throw;
+                    }
+                }
+
+                logger.LogInformation("📋 Database Schema Summary:");
+                logger.LogInformation("   • CsvData: Main CSV record storage with semicolon delimiter support");
+                logger.LogInformation("   • ProcessingLogs: Application and processing logs");
+                logger.LogInformation("   • AuditLogs: Automatic change tracking for all records");
+                logger.LogInformation("   • CsvProcessingHistory: File processing history and metrics");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "❌ Database table verification failed");
+                throw;
             }
         }
     }

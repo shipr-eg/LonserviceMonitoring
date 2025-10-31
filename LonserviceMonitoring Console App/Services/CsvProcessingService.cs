@@ -136,13 +136,27 @@ namespace LonserviceMonitoring.Services
             var recordsSkipped = 0;
             var detectedColumns = new List<string>();
 
+            // Detect delimiter if auto-detection is enabled
+            char delimiter = ',';
+            if (_csvSettings.AutoDetectDelimiter)
+            {
+                delimiter = await DetectDelimiterAsync(filePath);
+                processingLog.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Auto-detected delimiter: '{delimiter}'");
+            }
+            else
+            {
+                delimiter = _csvSettings.Delimiter.FirstOrDefault(',');
+                processingLog.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Using configured delimiter: '{delimiter}'");
+            }
+
             using var reader = new StringReader(await File.ReadAllTextAsync(filePath));
             using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
             {
                 HasHeaderRecord = true,
                 MissingFieldFound = null,
                 HeaderValidated = null,
-                TrimOptions = TrimOptions.Trim
+                TrimOptions = TrimOptions.Trim,
+                Delimiter = delimiter.ToString()
             });
 
             try
@@ -355,6 +369,52 @@ namespace LonserviceMonitoring.Services
             var nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
             var extension = Path.GetExtension(fileName);
             return $"{nameWithoutExtension}_{timeBlock}{extension}";
+        }
+
+        private async Task<char> DetectDelimiterAsync(string filePath)
+        {
+            try
+            {
+                // Read first few lines to detect delimiter
+                var lines = new List<string>();
+                using var reader = new StreamReader(filePath);
+                for (int i = 0; i < 5 && !reader.EndOfStream; i++)
+                {
+                    var line = await reader.ReadLineAsync();
+                    if (!string.IsNullOrEmpty(line))
+                        lines.Add(line);
+                }
+
+                if (!lines.Any())
+                    return ','; // Default to comma
+
+                // Count occurrences of common delimiters
+                var delimiters = new char[] { ',', ';', '\t', '|' };
+                var delimiterCounts = new Dictionary<char, int>();
+
+                foreach (var delimiter in delimiters)
+                {
+                    var count = 0;
+                    foreach (var line in lines)
+                    {
+                        count += line.Count(c => c == delimiter);
+                    }
+                    delimiterCounts[delimiter] = count;
+                }
+
+                // Return the delimiter with the highest count (and count > 0)
+                var bestDelimiter = delimiterCounts
+                    .Where(kvp => kvp.Value > 0)
+                    .OrderByDescending(kvp => kvp.Value)
+                    .FirstOrDefault();
+
+                return bestDelimiter.Key != default ? bestDelimiter.Key : ',';
+            }
+            catch
+            {
+                // If detection fails, return default comma
+                return ',';
+            }
         }
     }
 }

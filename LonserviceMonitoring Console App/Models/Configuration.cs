@@ -26,5 +26,7 @@ namespace LonserviceMonitoring.Models
     public class CsvSettings
     {
         public List<string> DefaultColumns { get; set; } = new List<string>();
+        public string Delimiter { get; set; } = ",";
+        public bool AutoDetectDelimiter { get; set; } = true;
     }
 }
