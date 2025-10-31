@@ -48,6 +48,23 @@ namespace LonserviceMonitoring.Models
     {
         public List<string> SystemColumns { get; set; } = new();
         public List<string> EssentialColumns { get; set; } = new();
+        public GroupingConfiguration Grouping { get; set; } = new();
+    }
+
+    public class GroupingConfiguration
+    {
+        public bool EnableGrouping { get; set; } = true;
+        public string GroupByColumn { get; set; } = "company";
+        public string SortDirection { get; set; } = "asc"; // "asc" or "desc"
+        public string SortByColumn { get; set; } = "createddate";
+        public List<GroupingOption> AvailableGroupingColumns { get; set; } = new();
+    }
+
+    public class GroupingOption
+    {
+        public string ColumnName { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public bool IsEnabled { get; set; } = true;
     }
 
     public class EmployeeList

@@ -21,13 +21,6 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
-// Add connection string
-builder.Services.AddScoped<IDbConnection>(provider =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    return new SqlConnection(connectionString);
-});
-
 // Add DataService
 builder.Services.AddScoped<DataService>();
 

@@ -148,7 +148,6 @@ namespace LonserviceMonitoring.Controllers
         {
             try
             {
-
                 // Check model validation
                 if (!ModelState.IsValid)
                 {
@@ -165,6 +164,25 @@ namespace LonserviceMonitoring.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error creating company", error = ex.Message });
+            }
+        }
+
+        [HttpPost("configuration/grouping")]
+        public ActionResult UpdateGroupingConfiguration([FromBody] GroupingConfiguration groupingConfig)
+        {
+            try
+            {
+                // Update the current configuration
+                _dashboardConfig.Grouping = groupingConfig;
+                
+                // In a real application, you might want to persist this to a database or file
+                // For now, it's only updated in memory
+                
+                return Ok(new { message = "Grouping configuration updated successfully", configuration = groupingConfig });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error updating grouping configuration", error = ex.Message });
             }
         }
     }

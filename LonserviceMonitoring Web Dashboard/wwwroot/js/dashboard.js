@@ -130,8 +130,13 @@ async function initializeDashboard() {
 
 // Process and display data
 function processAndDisplayData() {
-  // Group data by company
-  groupedData = groupDataByCompany(allData);
+  // Group data based on configuration
+  if (dashboardConfig?.grouping?.enableGrouping) {
+    groupedData = groupDataByColumn(allData, dashboardConfig.grouping);
+  } else {
+    // If grouping is disabled, treat all data as one group
+    groupedData = { "All Records": allData };
+  }
 
   // Render grouped data
   renderGroupedData();
@@ -140,26 +145,65 @@ function processAndDisplayData() {
   updateSummaryCounts();
 }
 
-// Group data by company
-function groupDataByCompany(data) {
+// Group data by configurable column
+function groupDataByColumn(data, groupingConfig) {
   const grouped = {};
+  const groupByColumn = groupingConfig.groupByColumn || 'company';
+  const sortByColumn = groupingConfig.sortByColumn || 'createddate';
+  const sortDirection = groupingConfig.sortDirection || 'asc';
 
   data.forEach((record) => {
-    const company = record.company || "Unknown";
-    if (!grouped[company]) {
-      grouped[company] = [];
+    // Get the grouping value - check both direct properties and additional properties
+    let groupValue = record[groupByColumn] || 
+                     record.additionalProperties?.[groupByColumn] || 
+                     record.additionalProperties?.[groupByColumn.toLowerCase()] ||
+                     "Unknown";
+    
+    // Handle boolean values for grouping (like 'contacted')
+    if (typeof groupValue === 'boolean') {
+      groupValue = groupValue ? 'Yes' : 'No';
     }
-    grouped[company].push(record);
+    
+    // Ensure groupValue is a string
+    groupValue = String(groupValue);
+    
+    if (!grouped[groupValue]) {
+      grouped[groupValue] = [];
+    }
+    grouped[groupValue].push(record);
   });
 
-  // Sort each group by CreatedDate
-  Object.keys(grouped).forEach((company) => {
-    grouped[company].sort(
-      (a, b) => new Date(b.createdDate) - new Date(a.createdDate)
-    );
+  // Sort each group by the specified column
+  Object.keys(grouped).forEach((groupKey) => {
+    grouped[groupKey].sort((a, b) => {
+      let aVal = a[sortByColumn] || a.additionalProperties?.[sortByColumn] || "";
+      let bVal = b[sortByColumn] || b.additionalProperties?.[sortByColumn] || "";
+      
+      // Handle date sorting
+      if (sortByColumn.toLowerCase().includes('date')) {
+        aVal = new Date(aVal);
+        bVal = new Date(bVal);
+      }
+      
+      if (sortDirection === 'desc') {
+        return bVal > aVal ? 1 : -1;
+      } else {
+        return aVal > bVal ? 1 : -1;
+      }
+    });
   });
 
   return grouped;
+}
+
+// Legacy function for backward compatibility
+function groupDataByCompany(data) {
+  const defaultGrouping = {
+    groupByColumn: 'company',
+    sortByColumn: 'createddate',
+    sortDirection: 'desc'
+  };
+  return groupDataByColumn(data, defaultGrouping);
 }
 
 // Render grouped data
@@ -1683,5 +1727,174 @@ function getProcessedStatusBadge(status) {
       return "bg-secondary";
     default:
       return "bg-light text-dark";
+  }
+}
+
+// Grouping Configuration Functions
+function showGroupingModal() {
+  const modal = new bootstrap.Modal(document.getElementById('groupingModal'));
+  
+  // Populate available columns for grouping
+  populateGroupingColumns();
+  
+  // Load current configuration
+  loadCurrentGroupingConfig();
+  
+  modal.show();
+}
+
+function populateGroupingColumns() {
+  const groupBySelect = document.getElementById('groupByColumn');
+  const sortBySelect = document.getElementById('sortByColumn');
+  
+  // Clear existing options
+  groupBySelect.innerHTML = '';
+  sortBySelect.innerHTML = '';
+  
+  // Get available columns from configuration
+  const availableColumns = dashboardConfig?.grouping?.availableGroupingColumns || 
+                           ['company', 'contacted', 'createddate', 'modifieddate'];
+  
+  // Populate Group By dropdown
+  availableColumns.forEach(column => {
+    const option = document.createElement('option');
+    option.value = column;
+    option.textContent = formatColumnName(column);
+    groupBySelect.appendChild(option);
+  });
+  
+  // Populate Sort By dropdown (include all available columns)
+  const allColumns = allDatabaseColumns.length > 0 ? allDatabaseColumns : availableColumns;
+  allColumns.forEach(column => {
+    const option = document.createElement('option');
+    option.value = column;
+    option.textContent = formatColumnName(column);
+    sortBySelect.appendChild(option);
+  });
+}
+
+function formatColumnName(column) {
+  // Ensure column is a string
+  if (!column || typeof column !== 'string') {
+    return String(column || 'Unknown');
+  }
+  
+  // Convert camelCase or lowercase to Title Case
+  return column
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, str => str.toUpperCase())
+    .trim();
+}
+
+function loadCurrentGroupingConfig() {
+  const config = dashboardConfig?.grouping;
+  
+  if (config) {
+    document.getElementById('enableGrouping').checked = config.enableGrouping !== false;
+    document.getElementById('groupByColumn').value = config.groupByColumn || 'company';
+    document.getElementById('sortByColumn').value = config.sortByColumn || 'createddate';
+    document.getElementById('sortDirection').value = config.sortDirection || 'desc';
+  }
+  
+  // Update preview
+  updateGroupingPreview();
+  
+  // Show/hide grouping options based on enabled state
+  toggleGroupingOptions();
+}
+
+function updateGroupingPreview() {
+  const enabled = document.getElementById('enableGrouping').checked;
+  const groupBy = document.getElementById('groupByColumn').value;
+  const sortBy = document.getElementById('sortByColumn').value;
+  const sortDirection = document.getElementById('sortDirection').value;
+  
+  const preview = document.getElementById('groupingPreview');
+  
+  if (!enabled) {
+    preview.innerHTML = 'Data grouping is <strong>disabled</strong>. All data will be shown in a single table.';
+  } else {
+    const sortText = sortDirection === 'desc' ? 'descending' : 'ascending';
+    preview.innerHTML = `Data will be grouped by <strong>${formatColumnName(groupBy)}</strong>, sorted by <strong>${formatColumnName(sortBy)}</strong> in <strong>${sortText}</strong> order.`;
+  }
+}
+
+function toggleGroupingOptions() {
+  const enabled = document.getElementById('enableGrouping').checked;
+  const optionsDiv = document.getElementById('groupingOptions');
+  
+  if (enabled) {
+    optionsDiv.style.display = 'block';
+  } else {
+    optionsDiv.style.display = 'none';
+  }
+  
+  updateGroupingPreview();
+}
+
+// Add event listeners for real-time preview updates
+document.addEventListener('DOMContentLoaded', function() {
+  // Add event listeners after modal is in DOM
+  setTimeout(() => {
+    const enableCheckbox = document.getElementById('enableGrouping');
+    const groupBySelect = document.getElementById('groupByColumn');
+    const sortBySelect = document.getElementById('sortByColumn');
+    const sortDirectionSelect = document.getElementById('sortDirection');
+    
+    if (enableCheckbox) {
+      enableCheckbox.addEventListener('change', toggleGroupingOptions);
+    }
+    
+    [groupBySelect, sortBySelect, sortDirectionSelect].forEach(element => {
+      if (element) {
+        element.addEventListener('change', updateGroupingPreview);
+      }
+    });
+  }, 100);
+});
+
+async function applyGroupingConfiguration() {
+  try {
+    const newConfig = {
+      enableGrouping: document.getElementById('enableGrouping').checked,
+      groupByColumn: document.getElementById('groupByColumn').value,
+      sortByColumn: document.getElementById('sortByColumn').value,
+      sortDirection: document.getElementById('sortDirection').value,
+      availableGroupingColumns: dashboardConfig?.grouping?.availableGroupingColumns || 
+                                ['company', 'contacted', 'createddate', 'modifieddate']
+    };
+    
+    // Update configuration on server
+    const response = await fetch('/api/data/grouping-configuration', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(newConfig)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update grouping configuration');
+    }
+    
+    // Update local configuration
+    if (!dashboardConfig) {
+      dashboardConfig = {};
+    }
+    dashboardConfig.grouping = newConfig;
+    
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('groupingModal'));
+    modal.hide();
+    
+    // Reprocess and display data with new configuration
+    processAndDisplayData();
+    
+    // Show success message
+    showToast("Grouping configuration updated successfully!", "success");
+    
+  } catch (error) {
+    console.error('Error updating grouping configuration:', error);
+    showToast("Failed to update grouping configuration. Please try again.", "error");
   }
 }

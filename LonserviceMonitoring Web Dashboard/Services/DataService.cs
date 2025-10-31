@@ -7,35 +7,27 @@ namespace LonserviceMonitoring.Services
 {
     public class DataService
     {
-        private readonly SqlConnection _connection;
         private readonly IConfiguration _configuration;
+        private readonly string _connectionString;
 
-        public DataService(IDbConnection connection, IConfiguration configuration)
+        public DataService(IConfiguration configuration)
         {
-            _connection = (SqlConnection)connection;
             _configuration = configuration;
+            _connectionString = configuration.GetConnectionString("DefaultConnection") 
+                ?? throw new InvalidOperationException("DefaultConnection string not found");
         }
 
         public async Task<List<CsvDataModel>> GetAllDataAsync()
         {
             var data = new List<CsvDataModel>();
-
-            if (_connection.State != ConnectionState.Open)
-                await _connection.OpenAsync();
-
-            using var command = _connection.CreateCommand();
-            // Select all columns - we'll filter out system columns in code
-            // command.CommandText = "SELECT * FROM CsvData ORDER BY Company, Id";
-            command.CommandText = @"SELECT 
-                c.*,
-                cd.ProcessedStatus,
-                (e.FirstName + ' ' + e.LastName) AS AssigneeName
-            FROM [LonserviceMonitoringDB].[dbo].[CsvData] AS c
-            LEFT JOIN [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd 
-                ON c.Company = cd.Company
-            LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e 
-                ON e.EmployeeID = cd.Assignee";
             
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = connection.CreateCommand();
+            // Select all columns - order by Firmanr and Id
+            command.CommandText = "SELECT * FROM CsvData ORDER BY Firmanr, Id";
+
             using var reader = await command.ExecuteReaderAsync();
             var columnNames = new List<string>();
 
@@ -96,15 +88,15 @@ namespace LonserviceMonitoring.Services
         {
             try
             {
-                if (_connection.State != ConnectionState.Open)
-                    await _connection.OpenAsync();
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
 
-                using var transaction = _connection.BeginTransaction();
+                using var transaction = connection.BeginTransaction();
 
                 foreach (var change in changes)
                 {
                     // Update the main record
-                    using var updateCmd = _connection.CreateCommand();
+                    using var updateCmd = connection.CreateCommand();
                     updateCmd.Transaction = transaction;
                     updateCmd.CommandText = @"
                         UPDATE CsvData 
@@ -118,7 +110,7 @@ namespace LonserviceMonitoring.Services
                     await updateCmd.ExecuteNonQueryAsync();
 
                     // Log the audit trail
-                    await LogAuditAsync(change.Id.ToString(), "UPDATE", user, JsonConvert.SerializeObject(change), transaction);
+                    await LogAuditAsync(change.Id.ToString(), "UPDATE", user, JsonConvert.SerializeObject(change), connection, transaction);
                 }
 
                 transaction.Commit();
@@ -136,11 +128,11 @@ namespace LonserviceMonitoring.Services
         {
             var logs = new List<AuditLogModel>();
 
-            if (_connection.State != ConnectionState.Open)
-                await _connection.OpenAsync();
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
 
-            using var command = _connection.CreateCommand();
-
+            using var command = connection.CreateCommand();
+            
             if (string.IsNullOrEmpty(searchTerm))
             {
                 command.CommandText = "SELECT TOP 1000 * FROM AuditLog ORDER BY Timestamp DESC";
@@ -173,10 +165,10 @@ namespace LonserviceMonitoring.Services
 
         public async Task<DataUpdateNotification> CheckForNewDataAsync()
         {
-            if (_connection.State != ConnectionState.Open)
-                await _connection.OpenAsync();
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
 
-            using var command = _connection.CreateCommand();
+            using var command = connection.CreateCommand();
             command.CommandText = @"
                 SELECT COUNT(*) as NewCount 
                 FROM CsvData 
@@ -192,9 +184,9 @@ namespace LonserviceMonitoring.Services
             };
         }
 
-        private async Task LogAuditAsync(string recordId, string action, string user, string changes, SqlTransaction transaction)
+        private async Task LogAuditAsync(string recordId, string action, string user, string changes, SqlConnection connection, SqlTransaction transaction)
         {
-            using var auditCmd = _connection.CreateCommand();
+            using var auditCmd = connection.CreateCommand();
             auditCmd.Transaction = transaction;
             auditCmd.CommandText = @"
                 INSERT INTO AuditLog (Timestamp, Action, [User], RecordId, Changes)
@@ -213,10 +205,10 @@ namespace LonserviceMonitoring.Services
         {
             var columns = new List<string>();
 
-            if (_connection.State != ConnectionState.Open)
-                await _connection.OpenAsync();
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
 
-            using var command = _connection.CreateCommand();
+            using var command = connection.CreateCommand();
             command.CommandText = "SELECT TOP 1 * FROM CsvData";
 
             using var reader = await command.ExecuteReaderAsync();
@@ -233,10 +225,10 @@ namespace LonserviceMonitoring.Services
         {
             var employees = new List<EmployeeList>();
 
-            if (_connection.State != ConnectionState.Open)
-                await _connection.OpenAsync();
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
 
-            using var command = _connection.CreateCommand();
+            using var command = connection.CreateCommand();
             command.CommandText = @"
                 SELECT GUID, EmployeeID, FirstName, LastName, IsAdmin, IsActive 
                 FROM EmployeeList 
@@ -264,10 +256,10 @@ namespace LonserviceMonitoring.Services
         {
             var companies = new List<CompanyDetails>();
 
-            if (_connection.State != ConnectionState.Open)
-                await _connection.OpenAsync();
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
 
-            using var command = _connection.CreateCommand();
+            using var command = connection.CreateCommand();
             command.CommandText = @"
                 SELECT Company, Assignee, ProcessedStatus, Created 
                 FROM CompanyDetails 
@@ -293,10 +285,10 @@ namespace LonserviceMonitoring.Services
         {
             var companies = new List<CompanyDetails>();
 
-            if (_connection.State != ConnectionState.Open)
-                await _connection.OpenAsync();
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
 
-            using var command = _connection.CreateCommand();
+            using var command = connection.CreateCommand();
             // command.CommandText = @"
             //     SELECT Company, Assignee, ProcessedStatus, TotalRecords, ContactedRecords, Created
             //     FROM CompanyDetails 
@@ -337,14 +329,14 @@ namespace LonserviceMonitoring.Services
         {
             try
             {
-                if (_connection.State != ConnectionState.Open)
-                    await _connection.OpenAsync();
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
 
                 // Check if a record with the same company name exists
                 bool recordExists = false;
                 CompanyDetails existing = null;
                 
-                using (var checkCommand = _connection.CreateCommand())
+                using (var checkCommand = connection.CreateCommand())
                 {
                     checkCommand.CommandText = @"
                         SELECT TOP 1 Company, Assignee, ProcessedStatus
@@ -371,7 +363,7 @@ namespace LonserviceMonitoring.Services
                 if (recordExists)
                 {
                     // Update existing record
-                    using var updateCommand = _connection.CreateCommand();
+                    using var updateCommand = connection.CreateCommand();
                     updateCommand.CommandText = @"
                         UPDATE CompanyDetails 
                         SET Assignee = @assignee, 
@@ -392,7 +384,7 @@ namespace LonserviceMonitoring.Services
                 else
                 {
                     // Insert new record
-                    using var insertCommand = _connection.CreateCommand();
+                    using var insertCommand = connection.CreateCommand();
                     insertCommand.CommandText = @"
                         INSERT INTO CompanyDetails (Company, Assignee, ProcessedStatus)
                         VALUES (@company, @assignee, @processedStatus)";
