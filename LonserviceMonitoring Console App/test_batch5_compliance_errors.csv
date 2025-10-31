@@ -1,6 +1,0 @@
-Company,Employee_Name,Payroll_Error_Type,Amount,Compliance_Flag,Regulatory_Code,Fine_Amount,Legal_Review_Required,Escalation_Level
-TechCorp Solutions,Gregory Martinez,FLSA Compliance Error,567.90,Yes,FLSA-001,1000.00,Yes,Level 3
-Global Industries,Matthew Brown,Union Dues Error,89.45,No,UNION-002,0.00,No,Level 1
-Financial Services Corp,Elizabeth Wilson,FICA Calculation Error,445.20,Yes,FICA-003,500.00,Yes,Level 2
-DataFlow Inc,Samantha Miller,Unemployment Tax Error,123.75,Yes,UNEMP-004,250.00,No,Level 1
-Retail Dynamics,Catherine Johnson,Minimum Wage Violation,234.15,Yes,WAGE-005,2000.00,Yes,Level 4

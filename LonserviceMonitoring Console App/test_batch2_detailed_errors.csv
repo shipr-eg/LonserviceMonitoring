@@ -1,6 +1,0 @@
-Company,Employee_Name,Payroll_Error_Type,Amount,Employee_ID,Cost_Center,Manager_Approval,Resolution_Status
-TechCorp Solutions,David Brown,Commission Error,567.80,EMP001,CC-ENG-001,Required,Pending
-Global Industries,Robert Taylor,Deduction Error,123.45,EMP002,CC-SAL-002,Approved,Resolved
-DataFlow Inc,Jennifer Davis,Timesheet Error,78.90,EMP003,CC-OPS-001,Required,In Progress
-Financial Services Corp,Nicole Adams,401k Contribution Error,223.50,EMP004,CC-FIN-003,Approved,Resolved
-Healthcare Solutions,Laura Thompson,Insurance Premium Error,245.60,EMP005,CC-MED-001,Required,Under Review
