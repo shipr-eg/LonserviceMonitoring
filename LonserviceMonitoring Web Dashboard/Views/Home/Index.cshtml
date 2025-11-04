@@ -259,7 +259,7 @@
 </head>
 <body>
     <!-- Admin Button -->
-    <button class="btn btn-outline-primary admin-btn" onclick="toggleAdminView()">
+    <button class="btn btn-outline-primary admin-btn" onclick="toggleAdminView()" style="display: none;">
         <i class="fas fa-user-shield"></i> Admin
     </button>
 
@@ -285,11 +285,18 @@
     <div class="container-fluid">
         <!-- Header -->
         <div class="row mb-4">
-            <div class="col-12">
+            <div class="col-12 position-relative">
                 <h1 class="display-6 text-center text-primary">
                     <i class="fas fa-chart-line me-3"></i>
-                    Lønservice Monitoring Dashboard
+                    <span data-translate="dashboard_title">Lønservice Monitoring Dashboard</span>
                 </h1>
+                <!-- Language Toggle Button -->
+                <div class="position-absolute top-0 end-0">
+                    <button id="languageToggle" class="btn btn-outline-primary btn-sm" onclick="toggleLanguage()">
+                        <i class="fas fa-globe me-1"></i>
+                        <span id="currentLanguage">DA</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -305,23 +312,24 @@
                             <i class="fas fa-search"></i>
                         </span>
                         <input type="text" id="globalSearch" class="form-control input-sm" 
+                               data-translate-placeholder="global_search_placeholder" 
                                placeholder="Global search across all data...">
                     </div>
                 </div>
                 <div class="col-md-5">
                     <div class="d-flex gap-2 mt-1">
                         <button class="btn btn-sm btn-outline-secondary" onclick="clearAllFilters()">
-                            <i class="fas fa-times me-1"></i> Clear Filters
+                            <i class="fas fa-times me-1"></i> <span data-translate="clear_filters">Clear Filters</span>
                         </button>
 
                         <button class="btn btn-sm btn-outline-primary ms-auto">
                              <i class="fas fa-history"></i>
                         </button>
 
-                        <button class="btn btn-sm btn-outline-primary" data-toggle="tooltip" data-placement="top" title="Expand All" onclick="expandAllGroups()">
+                        <button class="btn btn-sm btn-outline-primary" data-toggle="tooltip" data-placement="top" data-translate-title="expand_all" title="Expand All" onclick="expandAllGroups()">
                             <i class="fas fa-expand-alt me-1"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-primary" data-toggle="tooltip" data-placement="top" title="Collapse All" onclick="collapseAllGroups()">
+                        <button class="btn btn-sm btn-outline-primary" data-toggle="tooltip" data-placement="top" data-translate-title="collapse_all" title="Collapse All" onclick="collapseAllGroups()">
                             <i class="fas fa-compress-alt me-1"></i>
                         </button>
                         <!--
@@ -337,9 +345,9 @@
         <!-- Loading Spinner -->
         <div id="loadingSpinner" class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
+                <span class="visually-hidden" data-translate="loading">Loading...</span>
             </div>
-            <div class="mt-2">Loading dashboard data...</div>
+            <div class="mt-2" data-translate="loading_dashboard">Loading dashboard data...</div>
         </div>
         
         <!-- Data filter -->
@@ -356,7 +364,7 @@
                     <div class="modal-header">
                         <h5 class="modal-title">
                             <i class="fas fa-user-shield me-2"></i>
-                            Admin Panel
+                            <span data-translate="admin_panel">Admin Panel</span>
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
@@ -365,15 +373,15 @@
                         <div id="adminLogin">
                             <form onsubmit="adminLogin(event)">
                                 <div class="mb-3">
-                                    <label class="form-label">Username</label>
+                                    <label class="form-label" data-translate="username">Username</label>
                                     <input type="text" id="adminUsername" class="form-control" required>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Password</label>
+                                    <label class="form-label" data-translate="password">Password</label>
                                     <input type="password" id="adminPassword" class="form-control" required>
                                 </div>
                                 <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-sign-in-alt me-1"></i> Login
+                                    <i class="fas fa-sign-in-alt me-1"></i> <span data-translate="login">Login</span>
                                 </button>
                             </form>
                         </div>

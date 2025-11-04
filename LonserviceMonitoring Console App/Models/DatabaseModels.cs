@@ -120,4 +120,123 @@ namespace LonserviceMonitoring.Models
         
         public string? LoadedPath { get; set; }
     }
+
+    [Table("CompanyDetails")]
+    public class CompanyDetails
+    {
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
+        
+        [Required]
+        public string Firmanr { get; set; } = string.Empty;
+        
+        public int? Assignee { get; set; }
+        
+        public string? ProcessedStatus { get; set; } = "Not Started";
+        
+        public int TotalRows { get; set; } = 0;
+        
+        public int TotalRowsProcessed { get; set; } = 0;
+        
+        public DateTime? Created { get; set; } = DateTime.UtcNow;
+        
+        public DateTime? LastModified { get; set; } = DateTime.UtcNow;
+        
+        public string? LastModifiedBy { get; set; }
+    }
+
+    [Table("CsvDataAudit")]
+    public class CsvDataAudit
+    {
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
+        
+        [Required]
+        public Guid RecordId { get; set; }
+        
+        [Required]
+        public string Action { get; set; } = string.Empty;
+        
+        [Required]
+        public string ColumnName { get; set; } = string.Empty;
+        
+        public string? OldValue { get; set; }
+        
+        public string? NewValue { get; set; }
+        
+        [Required]
+        public string ModifiedBy { get; set; } = string.Empty;
+        
+        [Required]
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    }
+
+    [Table("CompanyDetailsAudit")]
+    public class CompanyDetailsAudit
+    {
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
+        
+        [Required]
+        public Guid RecordId { get; set; }
+        
+        [Required]
+        public string Action { get; set; } = string.Empty;
+        
+        [Required]
+        public string ColumnName { get; set; } = string.Empty;
+        
+        public string? OldValue { get; set; }
+        
+        public string? NewValue { get; set; }
+        
+        [Required]
+        public string ModifiedBy { get; set; } = string.Empty;
+        
+        [Required]
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    }
+
+    [Table("EmployeeListAudit")]
+    public class EmployeeListAudit
+    {
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
+        
+        [Required]
+        public Guid RecordId { get; set; }
+        
+        [Required]
+        public string Action { get; set; } = string.Empty;
+        
+        [Required]
+        public string ColumnName { get; set; } = string.Empty;
+        
+        public string? OldValue { get; set; }
+        
+        public string? NewValue { get; set; }
+        
+        [Required]
+        public string ModifiedBy { get; set; } = string.Empty;
+        
+        [Required]
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    }
+
+    [Table("EmployeeList")]
+    public class EmployeeList
+    {
+        [Key]
+        public Guid GUID { get; set; } = Guid.NewGuid();
+        
+        public string? EmployeeID { get; set; }
+        
+        public string? FirstName { get; set; }
+        
+        public string? LastName { get; set; }
+        
+        public bool IsAdmin { get; set; } = false;
+        
+        public bool IsActive { get; set; } = true;
+    }
 }

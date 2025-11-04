@@ -220,6 +220,7 @@ namespace LonserviceMonitoring.Services
             var batch = new List<Dictionary<string, object?>>();
             var recordsProcessed = 0;
             var recordsSkipped = 0;
+            var firmanrValues = new List<string>(); // Track all Firmanr values (not just unique)
 
             while (await csv.ReadAsync())
             {
@@ -245,6 +246,12 @@ namespace LonserviceMonitoring.Services
                             continue;
 
                         var sanitizedColumnName = SanitizeColumnName(column);
+                        
+                        // Track all Firmanr values for CompanyDetails processing (including duplicates for counting)
+                        if (column.Equals("Firmanr", StringComparison.OrdinalIgnoreCase))
+                        {
+                            firmanrValues.Add(value);
+                        }
                         
                         // Check if column exists in database
                         if (existingColumns.Contains(sanitizedColumnName, StringComparer.OrdinalIgnoreCase))
@@ -290,6 +297,9 @@ namespace LonserviceMonitoring.Services
                 await InsertBatchAsync(batch, existingColumns);
             }
 
+            // Process Firmanr values for CompanyDetails table
+            await ProcessFirmanrForCompanyDetailsAsync(firmanrValues, fileName, timeBlock, processingLog);
+
             return (recordsProcessed, recordsSkipped);
         }
 
@@ -323,6 +333,124 @@ namespace LonserviceMonitoring.Services
                 }
 
                 await command.ExecuteNonQueryAsync();
+            }
+        }
+
+        private async Task ProcessFirmanrForCompanyDetailsAsync(List<string> firmanrValues, string fileName, string timeBlock, List<string> processingLog)
+        {
+            if (!firmanrValues.Any())
+            {
+                processingLog.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] No Firmanr values found in CSV to process for CompanyDetails");
+                return;
+            }
+
+            var newCompaniesAdded = 0;
+            var existingCompaniesUpdated = 0;
+            var processedCompaniesNewRows = 0;
+
+            try
+            {
+                // Count rows in the current CSV for each Firmanr
+                var firmanrRowCounts = new Dictionary<string, int>();
+                foreach (var firmanr in firmanrValues)
+                {
+                    if (firmanrRowCounts.ContainsKey(firmanr))
+                        firmanrRowCounts[firmanr]++;
+                    else
+                        firmanrRowCounts[firmanr] = 1;
+                }
+
+                foreach (var firmanr in firmanrValues.Distinct())
+                {
+                    var rowsForThisFirmanr = firmanrRowCounts[firmanr];
+
+                    // Check if company already exists in CompanyDetails table
+                    var existingCompany = await _context.CompanyDetails
+                        .FirstOrDefaultAsync(cd => cd.Firmanr == firmanr);
+
+                    if (existingCompany == null)
+                    {
+                        // Non-existing value: Add new company with all default columns
+                        var newCompany = new CompanyDetails
+                        {
+                            Firmanr = firmanr,
+                            ProcessedStatus = "Not Started",
+                            Assignee = null, // Empty as requested
+                            TotalRows = rowsForThisFirmanr,
+                            TotalRowsProcessed = 0,
+                            Created = DateTime.UtcNow,
+                            LastModified = DateTime.UtcNow,
+                            LastModifiedBy = "System"
+                        };
+
+                        _context.CompanyDetails.Add(newCompany);
+                        newCompaniesAdded++;
+                        
+                        processingLog.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Added new company to CompanyDetails: {firmanr} with {rowsForThisFirmanr} rows");
+                    }
+                    else
+                    {
+                        // Existing company - check ProcessedStatus
+                        if (existingCompany.ProcessedStatus?.Equals("PROCESSED", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            // ProcessedStatus is PROCESSED: Create a new row
+                            var newCompanyRow = new CompanyDetails
+                            {
+                                Firmanr = firmanr,
+                                ProcessedStatus = "Not Started",
+                                Assignee = null, // Empty as requested
+                                TotalRows = rowsForThisFirmanr,
+                                TotalRowsProcessed = 0,
+                                Created = DateTime.UtcNow,
+                                LastModified = DateTime.UtcNow,
+                                LastModifiedBy = "System"
+                            };
+
+                            _context.CompanyDetails.Add(newCompanyRow);
+                            processedCompaniesNewRows++;
+                            
+                            processingLog.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Created new row for PROCESSED company: {firmanr} with {rowsForThisFirmanr} rows");
+                        }
+                        else
+                        {
+                            // ProcessedStatus is not PROCESSED: Increase TotalRows and TotalRowsProcessed
+                            existingCompany.TotalRows += rowsForThisFirmanr;
+                            existingCompany.TotalRowsProcessed += rowsForThisFirmanr;
+                            existingCompany.LastModified = DateTime.UtcNow;
+                            existingCompany.LastModifiedBy = "System";
+
+                            _context.CompanyDetails.Update(existingCompany);
+                            existingCompaniesUpdated++;
+                            
+                            processingLog.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Updated existing company: {firmanr} - added {rowsForThisFirmanr} rows (Total: {existingCompany.TotalRows}, Processed: {existingCompany.TotalRowsProcessed})");
+                        }
+                    }
+                }
+
+                // Save changes to database
+                var totalChanges = newCompaniesAdded + existingCompaniesUpdated + processedCompaniesNewRows;
+                if (totalChanges > 0)
+                {
+                    await _context.SaveChangesAsync();
+                    processingLog.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] CompanyDetails updated: {newCompaniesAdded} new companies, {existingCompaniesUpdated} updated, {processedCompaniesNewRows} new rows for processed companies");
+                    
+                    await _loggingService.LogAsync("Info", "CsvProcessingService", 
+                        $"CompanyDetails updated from CSV {fileName}: {newCompaniesAdded} new, {existingCompaniesUpdated} updated, {processedCompaniesNewRows} new rows", 
+                        fileName, timeBlock);
+                }
+                else
+                {
+                    processingLog.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] No changes made to CompanyDetails table");
+                }
+            }
+            catch (Exception ex)
+            {
+                processingLog.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Error updating CompanyDetails: {ex.Message}");
+                
+                await _loggingService.LogAsync("Error", "CsvProcessingService", 
+                    $"Failed to update CompanyDetails from CSV {fileName}: {ex.Message}", fileName, timeBlock, ex.ToString());
+                
+                throw;
             }
         }
 

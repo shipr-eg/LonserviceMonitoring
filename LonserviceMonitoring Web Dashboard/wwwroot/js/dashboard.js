@@ -9,10 +9,165 @@ let currentPage = 1;
 const recordsPerPage = 10;
 let employeesLists = [];
 
+// Language and Translation System
+let currentLanguage = 'en'; // Default to English
+
+const translations = {
+  en: {
+    dashboard_title: "Lønservice Monitoring Dashboard",
+    global_search_placeholder: "Global search across all data...",
+    clear_filters: "Clear Filters",
+    expand_all: "Expand All",
+    collapse_all: "Collapse All",
+    loading: "Loading...",
+    loading_dashboard: "Loading dashboard data...",
+    admin_panel: "Admin Panel",
+    username: "Username",
+    password: "Password",
+    login: "Login",
+    show_columns: "Show Columns",
+    hide_columns: "Hide Columns",
+    save: "Save",
+    close: "Close",
+    search: "Search",
+    history: "History",
+    status: "Status",
+    assignee: "Assignee",
+    notes: "Notes",
+    company: "Company",
+    total_count: "Total Rows",
+    processed_count: "Processed",
+    pending_count: "Pending Count",
+    error_count: "Error Count",
+    no_data: "No Data Available",
+    save_changes: "Save Changes",
+    refresh: "Refresh",
+    export: "Export",
+    filter: "Filter",
+    all: "All",
+    select_employee: "Select Employee",
+    select_status: "Select Status",
+    view_company_history: "View Company History",
+    not_started: "Not Started",
+    in_progress: "In Progress",
+    waiting: "Waiting",
+    processed: "Processed",
+    yes: "Yes",
+    no: "No"
+  },
+  da: {
+    dashboard_title: "Lønservice Overvågning Dashboard",
+    global_search_placeholder: "Global søgning på tværs af alle data...",
+    clear_filters: "Ryd Filtre",
+    expand_all: "Udvid Alle",
+    collapse_all: "Sammenfold Alle",
+    loading: "Indlæser...",
+    loading_dashboard: "Indlæser dashboard data...",
+    admin_panel: "Admin Panel",
+    username: "Brugernavn",
+    password: "Adgangskode",
+    login: "Log ind",
+    show_columns: "Vis Kolonner",
+    hide_columns: "Skjul Kolonner",
+    save: "Gem",
+    close: "Luk",
+    search: "Søg",
+    history: "Historie",
+    status: "Status",
+    assignee: "Tildelt",
+    notes: "Noter",
+    company: "Virksomhed",
+    total_count: "Samlede Rækker",
+    processed_count: "Behandlet",
+    pending_count: "Afventende Antal",
+    error_count: "Fejl Antal",
+    no_data: "Ingen Data Tilgængelig",
+    save_changes: "Gem Ændringer",
+    refresh: "Opdater",
+    export: "Eksporter",
+    filter: "Filter",
+    all: "Alle",
+    select_employee: "Vælg Medarbejder",
+    select_status: "Vælg Status",
+    view_company_history: "Se Virksomhedshistorik",
+    not_started: "Ikke Startet",
+    in_progress: "I Gang",
+    waiting: "Venter",
+    processed: "Behandlet",
+    yes: "Ja",
+    no: "Nej"
+  }
+};
+
+// Language toggle function
+function toggleLanguage() {
+  currentLanguage = currentLanguage === 'en' ? 'da' : 'en';
+  localStorage.setItem('preferredLanguage', currentLanguage);
+  updateLanguageDisplay();
+  translatePage();
+}
+
+// Update language button display
+function updateLanguageDisplay() {
+  const languageButton = document.getElementById('currentLanguage');
+  if (languageButton) {
+    languageButton.textContent = currentLanguage === 'en' ? 'DA' : 'EN';
+  }
+}
+
+// Translate all elements on the page
+function translatePage() {
+  const currentTranslations = translations[currentLanguage];
+  
+  // Translate elements with data-translate attribute
+  document.querySelectorAll('[data-translate]').forEach(element => {
+    const key = element.getAttribute('data-translate');
+    if (currentTranslations[key]) {
+      element.textContent = currentTranslations[key];
+    }
+  });
+  
+  // Translate placeholder attributes
+  document.querySelectorAll('[data-translate-placeholder]').forEach(element => {
+    const key = element.getAttribute('data-translate-placeholder');
+    if (currentTranslations[key]) {
+      element.placeholder = currentTranslations[key];
+    }
+  });
+  
+  // Translate title attributes
+  document.querySelectorAll('[data-translate-title]').forEach(element => {
+    const key = element.getAttribute('data-translate-title');
+    if (currentTranslations[key]) {
+      element.title = currentTranslations[key];
+    }
+  });
+  
+  // Re-render the dashboard to update dynamic content
+  if (allData.length > 0) {
+    renderDashboard();
+  }
+}
+
+// Initialize language from localStorage
+function initializeLanguage() {
+  const savedLanguage = localStorage.getItem('preferredLanguage');
+  if (savedLanguage && translations[savedLanguage]) {
+    currentLanguage = savedLanguage;
+  }
+  updateLanguageDisplay();
+  translatePage();
+}
+
+// Helper function to get translated text
+function t(key) {
+  return translations[currentLanguage][key] || key;
+}
+
 // Column visibility settings
 let columnVisibilitySettings = {};
 let allDatabaseColumns = [];
-let systemColumns = [];
+let hiddenColumns = [];
 let essentialColumns = [];
 let dashboardConfig = null;
 const statusOptions = ["Not Started", "In Progress", "Waiting", "Processed"];
@@ -24,6 +179,7 @@ const saveToast = new bootstrap.Toast(document.getElementById("saveToast"), {
 
 // Initialize dashboard
 document.addEventListener("DOMContentLoaded", function () {
+  initializeLanguage(); // Initialize language first
   initializeDashboard();
   setupEventListeners();
 
@@ -73,23 +229,24 @@ async function loadDashboardConfiguration() {
     if (!response.ok) throw new Error("Failed to fetch configuration");
 
     dashboardConfig = await response.json();
-    console.log("Fetching dashboard configuration...");
-    systemColumns = dashboardConfig.systemColumns || [];
+    hiddenColumns = dashboardConfig.hiddenColumns || [];
     essentialColumns = dashboardConfig.essentialColumns || [];
   } catch (error) {
     console.error("Error loading dashboard configuration:", error);
     // Fallback to default configuration
-    systemColumns = [
+    hiddenColumns = [
       "id",
-      "createddate",
       "modifieddate",
-      "sourcefilename",
-      "timeblock",
+      "assignee",
+      "companyprocessedstatus",
+      "companytotalrows",
+      "companytotalrowsprocessed",
+      "assigneename",
       "confirmed",
-      "notes",
-      "company",
+      "processedstatus",
+      "timeblock"
     ];
-    essentialColumns = ["confirmed", "notes", "company"];
+    essentialColumns = ["notes", "firmanr"];
     showError("Using default configuration due to configuration load error.");
   }
 }
@@ -115,9 +272,6 @@ async function initializeDashboard() {
 
     createCompanyFilter();
 
-    // Initialize column visibility settings
-    initializeColumnVisibility();
-
     processAndDisplayData();
     filterCompanyBasedOnStatusnAssignee(statusOptions[0], null);
     showLoading(false);
@@ -130,36 +284,54 @@ async function initializeDashboard() {
 
 // Process and display data
 function processAndDisplayData() {
+  console.log("=== processAndDisplayData START ===");
+  console.log("allData length:", allData.length);
+  console.log("allData sample:", allData.length > 0 ? allData[0] : "no data");
+  
+  // Initialize column visibility settings first
+  initializeColumnVisibility();
+  
   // Group data based on configuration
   if (dashboardConfig?.grouping?.enableGrouping) {
+    console.log("Grouping enabled, using groupDataByColumn");
     groupedData = groupDataByColumn(allData, dashboardConfig.grouping);
   } else {
+    console.log("Grouping disabled, treating all data as one group");
     // If grouping is disabled, treat all data as one group
     groupedData = { "All Records": allData };
   }
-
+  
+  console.log("groupedData keys:", Object.keys(groupedData));
+  console.log("groupedData:", groupedData);
+  
   // Render grouped data
   renderGroupedData();
 
   // Update summary counts
   updateSummaryCounts();
+  console.log("=== processAndDisplayData END ===");
 }
 
 // Group data by configurable column
 function groupDataByColumn(data, groupingConfig) {
+  console.log("=== groupDataByColumn START ===");
+  console.log("Input data length:", data.length);
+  console.log("groupingConfig:", groupingConfig);
+  
   const grouped = {};
-  const groupByColumn = groupingConfig.groupByColumn || 'company';
+  const groupByColumn = groupingConfig.groupByColumn || 'firmanr';
   const sortByColumn = groupingConfig.sortByColumn || 'createddate';
   const sortDirection = groupingConfig.sortDirection || 'asc';
 
-  data.forEach((record) => {
-    // Get the grouping value - check both direct properties and additional properties
-    let groupValue = record[groupByColumn] || 
-                     record.additionalProperties?.[groupByColumn] || 
-                     record.additionalProperties?.[groupByColumn.toLowerCase()] ||
-                     "Unknown";
+  console.log("Grouping by column:", groupByColumn);
+
+  data.forEach((record, index) => {
+    // Get the grouping value - check direct properties only
+    let groupValue = record[groupByColumn] || "Unknown";
     
-    // Handle boolean values for grouping (like 'contacted')
+    console.log(`Record ${index}: ${groupByColumn} = "${groupValue}", processedStatus = "${record.processedStatus}", companyprocessedstatus = "${record.companyprocessedstatus}", assigneeName = "${record.assigneeName}", CompanyAssigneeName = "${record.CompanyAssigneeName}"`);
+    
+    // Handle boolean values for grouping (like 'confirmed')
     if (typeof groupValue === 'boolean') {
       groupValue = groupValue ? 'Yes' : 'No';
     }
@@ -176,8 +348,8 @@ function groupDataByColumn(data, groupingConfig) {
   // Sort each group by the specified column
   Object.keys(grouped).forEach((groupKey) => {
     grouped[groupKey].sort((a, b) => {
-      let aVal = a[sortByColumn] || a.additionalProperties?.[sortByColumn] || "";
-      let bVal = b[sortByColumn] || b.additionalProperties?.[sortByColumn] || "";
+      let aVal = a[sortByColumn] || "";
+      let bVal = b[sortByColumn] || "";
       
       // Handle date sorting
       if (sortByColumn.toLowerCase().includes('date')) {
@@ -193,13 +365,20 @@ function groupDataByColumn(data, groupingConfig) {
     });
   });
 
+  console.log("Final grouped data:", grouped);
+  console.log("Group keys:", Object.keys(grouped));
+  Object.keys(grouped).forEach(key => {
+    console.log(`Group "${key}": ${grouped[key].length} records`);
+  });
+  console.log("=== groupDataByColumn END ===");
+
   return grouped;
 }
 
 // Legacy function for backward compatibility
 function groupDataByCompany(data) {
   const defaultGrouping = {
-    groupByColumn: 'company',
+    groupByColumn: 'firmanr',
     sortByColumn: 'createddate',
     sortDirection: 'desc'
   };
@@ -208,31 +387,39 @@ function groupDataByCompany(data) {
 
 // Render grouped data
 function renderGroupedData() {
+  console.log("=== renderGroupedData START ===");
+  console.log("groupedData keys:", Object.keys(groupedData));
+  console.log("groupedData length:", Object.keys(groupedData).length);
+  
   const container = document.getElementById("dataContainer");
   container.innerHTML = "";
 
   if (Object.keys(groupedData).length === 0) {
+    console.log("No grouped data found, showing warning message");
     container.innerHTML = `
       <div class="alert alert-warning text-center py-5 my-4" role="alert">
         <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
-        <h2 class="fw-bold mb-3">No Data Available</h2>
+        <h2 class="fw-bold mb-3">${t('no_data')}</h2>
         <p class="lead mb-0">There are currently no records to display. Please check your filters or try refreshing the page.</p>
       </div>
     `;
     return;
   }
 
+  console.log("Rendering groups...");
   // Get all column names dynamically
   const columns = getColumnNames();
+  console.log("Columns to display:", columns);
+  
   Object.keys(groupedData)
     .sort()
     .forEach((company) => {
       const groupData = groupedData[company];
+      console.log(`Rendering group "${company}" with ${groupData.length} records`);
       const groupElement = createCompanyGroup(company, groupData, columns);
       container.appendChild(groupElement);
 
       // Apply default confirmed filter after DOM is ready
-
       setTimeout(() => {
         applyGroupFilters(company);
       }, 0);
@@ -253,16 +440,19 @@ function getColumnNames() {
   // Return only visible columns
   const visibleColumns = getVisibleColumns();
 
-  // Put Confirmed and Notes at the beginning, then Company, then all other visible columns
+  // Put essential columns at the beginning, SourceFileName at the end
   const specialColumns = essentialColumns.map((col) => col.toLowerCase());
+  const sourceFileNameColumns = ["sourcefilename"];
+  
   const remainingColumns = visibleColumns.filter(
-    (col) => !specialColumns.includes(col.toLowerCase())
+    (col) => !specialColumns.includes(col.toLowerCase()) && 
+            !sourceFileNameColumns.includes(col.toLowerCase())
   );
 
-  // Final column order: Essential columns first, then all other visible CSV data columns
+  // Final column order: Essential columns first, then other visible columns, then SourceFileName at the end
   const finalOrder = [];
 
-  // Add special columns in desired order if they are visible
+  // Add essential columns in desired order if they are visible
   essentialColumns.forEach((colName) => {
     const found = visibleColumns.find(
       (col) => col.toLowerCase() === colName.toLowerCase()
@@ -270,10 +460,18 @@ function getColumnNames() {
     if (found) finalOrder.push(found);
   });
 
-  // Add remaining visible columns
+  // Add remaining visible columns (excluding SourceFileName)
   remainingColumns.forEach((col) => {
     finalOrder.push(col);
   });
+
+  // Add SourceFileName at the end if it's visible
+  const sourceFileNameCol = visibleColumns.find(
+    (col) => col.toLowerCase() === "sourcefilename"
+  );
+  if (sourceFileNameCol) {
+    finalOrder.push(sourceFileNameCol);
+  }
 
   return finalOrder;
 }
@@ -331,37 +529,35 @@ function createCompanyGroup(company, data, columns) {
   const confirmedCount = data.filter((r) => r.confirmed).length;
   const notConfirmedCount = data.length - confirmedCount;
   const companyId = company.replace(/\s+/g, "-").toLowerCase();
-  const assignee = data[0].assigneeName || "Unassigned";
+  const assignee = data[0].CompanyAssigneeName || data[0].assigneeName || "Unassigned";
+  console.log("Data: ",data[0])
   const processedStatus = data[0].processedStatus || "Not Started";
+  const totalRows = data[0].companyTotalRows || data.length;
+  const totalRowsProcessed = data[0].companyTotalRowsProcessed || confirmedCount;
+  
   groupDiv.innerHTML = `
         <div class="group-header" 
              onclick="toggleCompanyAccordion('${companyId}')"
              style="cursor: pointer;">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <div class="d-flex gap-3">
+                    <div class="d-flex gap-3 align-items-center">
                         <div style="min-width: 240px;">
                           <strong style="font-size: 1.1rem;">${company}</strong>
                         </div>
-                        <span >
-                          <span class="badge bg-light text-dark">
-                              Total: 
-                              <span id="total-${company}">${data.length}</span>
+                        <span>
+                          <span class="badge bg-info text-dark">
+                              ${t('total_count')}: <span id="total-rows-${company}">${totalRows}</span>
                           </span>
                         </span>
                         <span>
                           <span class="badge bg-success">
-                              Confirmed: <span id="confirmed-${company}">${confirmedCount}</span>
+                              ${t('processed_count')}: <span id="processed-rows-${company}">${totalRowsProcessed}</span>
                           </span>
                         </span>
-                        <span>
-                          <span class="badge bg-warning text-dark">
-                              Not confirmed: <span id="not-confirmed-${company}">${notConfirmedCount}</span>
-                          </span> 
-                        </span>
-                        <label>Assignee:</label>
+                        <label>${t('assignee')}:</label>
                         <select id="employee-select-${companyId}" class="form-select form-select-sm bg-secondary text-white" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', this.value, null)">
-                            <option value="">Select Employee</option>
+                            <option value="">${t('select_employee')}</option>
                             ${employeesLists
                               .map(
                                 (emp) =>
@@ -371,9 +567,10 @@ function createCompanyGroup(company, data, columns) {
                               )
                               .join("")}
                         </select>
-                        <label>Status:</label>
+                        <label>${t('status')}:</label>
                         <select id="status-select-${companyId}" class="form-select form-select-sm bg-secondary text-white" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', null, this.value)" >
-                        <option value="">Select Status</option>    
+                        
+                        <option value="">${t('select_status')}</option>    
                         ${statusOptions
                           .map(
                             (status) => ` 
@@ -384,6 +581,9 @@ function createCompanyGroup(company, data, columns) {
                           )
                           .join("")}  
                         </select>
+                        <button class="btn btn-sm btn-outline-info ms-2" onclick="showCompanyHistory('${company}'); event.stopPropagation();" title="View Company History">
+                            <i class="fas fa-history"></i> ${t('history')}
+                        </button>
                     </div>
                 </div>
                 <div class="collapse-icon">
@@ -513,9 +713,9 @@ function createColumnFilter(columnName, company) {
   if (columnName.toLowerCase() === "confirmed") {
     return `
             <select class="filter-input active-filter" id="${filterId}" onchange="filterByColumn('${company}', '${columnName}', this.value)">
-                <option value="">All</option>
-                <option value="true">Yes</option>
-                <option value="false" selected>No</option>
+                <option value="">${t('all')}</option>
+                <option value="true">${t('yes')}</option>
+                <option value="false" selected>${t('no')}</option>
             </select>
         `;
   } else {
@@ -578,7 +778,7 @@ function renderTableCell(record, columnName, company) {
 function getRecordValue(record, columnName) {
   const lowerCol = columnName.toLowerCase();
 
-  // Check main properties first
+  // Check main properties first (case-insensitive)
   if (record.hasOwnProperty(lowerCol)) {
     return record[lowerCol];
   }
@@ -588,19 +788,15 @@ function getRecordValue(record, columnName) {
     return record[columnName];
   }
 
-  // Check additional properties
-  if (record.additionalProperties && record.additionalProperties[columnName]) {
-    return record.additionalProperties[columnName];
-  }
-
   return "";
 }
 
-// Format date
+// Format date to show both date and time
 function formatDate(dateString) {
   if (!dateString) return "";
   try {
-    return new Date(dateString).toLocaleDateString();
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   } catch {
     return dateString;
   }
@@ -936,8 +1132,12 @@ function performGlobalSearch() {
   });
 
   // Regroup and display
-  groupedData = groupDataByCompany(filteredData);
-  renderGroupedData();
+  if (filteredData.length > 0) {
+    groupedData = groupDataByCompany(filteredData);
+    renderGroupedData();
+  } else {
+    console.log("performGlobalSearch: No filtered data, keeping existing groupedData");
+  }
 }
 
 // Helper functions to get current filter values
@@ -976,9 +1176,14 @@ function filterCompanyBasedOnStatusnAssignee(processedStatus, assignee) {
       return true;
     }
   });
+  
   // Update the display with filtered data
-  groupedData = groupDataByCompany(filteredData);
-  renderGroupedData();
+  if (filteredData.length > 0) {
+    groupedData = groupDataByCompany(filteredData);
+    renderGroupedData();
+  } else {
+    console.log("filterCompanyBasedOnStatusnAssignee: No filtered data, keeping existing groupedData");
+  }
 }
 
 function filterByColumn(company, columnName, filterValue) {
@@ -998,13 +1203,18 @@ function searchWithinGroup(company, searchTerm) {
 }
 
 function applyGroupFilters(company, groupSearch = "") {
+  console.log(`=== applyGroupFilters START for company: "${company}" ===`);
+  
   const originalData = allData.filter(
-    (r) => (r.company || "Unknown") === company
+    (r) => (r.firmanr || "Unknown") === company
   );
+  console.log(`Original data for company "${company}":`, originalData.length, "records");
+  
   let filteredData = [...originalData];
 
   // Apply group search
   if (groupSearch) {
+    console.log(`Applying group search: "${groupSearch}"`);
     filteredData = filteredData.filter((record) =>
       Object.values(record).some(
         (value) =>
@@ -1012,6 +1222,7 @@ function applyGroupFilters(company, groupSearch = "") {
           value.toString().toLowerCase().includes(groupSearch.toLowerCase())
       )
     );
+    console.log(`After group search, filtered data:`, filteredData.length, "records");
   }
 
   // Apply column filters
@@ -1072,7 +1283,7 @@ function applyGroupFilters(company, groupSearch = "") {
 
 function getFilteredData(company) {
   const originalData = allData.filter(
-    (r) => (r.company || "Unknown") === company
+    (r) => (r.firmanr || "Unknown") === company
   );
   let filteredData = [...originalData];
 
@@ -1155,7 +1366,7 @@ function handleEmployeeSelection(
   processedStatus = null
 ) {
   if (company) {
-    const companyObj = { company, assignee, processedStatus };
+    const companyObj = { Firmanr: company, assignee, processedStatus };
     addNewCompanyDetails(companyObj);
   }
 }
@@ -1184,10 +1395,10 @@ function addNewCompanyDetails(companyObj) {
 // Update All Data based on the new company update
 function updateAllDataBasedOnCompanyUpdate(companyObj) {
   allData
-    .filter((record) => record.company === companyObj.company)
+    .filter((record) => record.firmanr === companyObj.Firmanr)
     .forEach((record) => {
       if (companyObj.processedStatus) {
-        record.processedStatus = companyObj.processedStatus;
+        record.companyprocessedstatus = companyObj.processedStatus;
       } else if (companyObj.assignee) {
         const assignee = employeesLists.find(
           (emp) => emp.employeeID === companyObj.assignee
@@ -1464,20 +1675,10 @@ function initializeColumnVisibility() {
   if (allData.length > 0) {
     const sampleRecord = allData[0];
     allDatabaseColumns = Object.keys(sampleRecord);
-
-    // Add additional properties columns if they exist
-    if (sampleRecord.additionalProperties) {
-      Object.keys(sampleRecord.additionalProperties).forEach((col) => {
-        if (!allDatabaseColumns.includes(col)) {
-          allDatabaseColumns.push(col);
-        }
-      });
-    }
-
-    // Initialize visibility settings - hide system columns by default
+    // Initialize visibility settings - show all columns except hidden ones
     allDatabaseColumns.forEach((col) => {
-      const isSystemColumn = systemColumns.includes(col.toLowerCase());
-      columnVisibilitySettings[col] = !isSystemColumn;
+      const isHiddenColumn = hiddenColumns.includes(col.toLowerCase());
+      columnVisibilitySettings[col] = !isHiddenColumn;
     });
 
     // Always show the essential columns at the beginning
@@ -1489,6 +1690,9 @@ function initializeColumnVisibility() {
         columnVisibilitySettings[found] = true;
       }
     });
+    
+  } else {
+    // No data available for column initialization
   }
 }
 
@@ -1504,33 +1708,33 @@ function populateColumnCheckboxes() {
   const container = document.getElementById("columnCheckboxes");
   container.innerHTML = "";
 
-  // Group columns: System columns first, then data columns
+  // Group columns: Hidden columns first, then data columns
   const dataColumns = allDatabaseColumns.filter(
-    (col) => !systemColumns.includes(col.toLowerCase())
+    (col) => !hiddenColumns.includes(col.toLowerCase())
   );
-  const systemCols = allDatabaseColumns.filter((col) =>
-    systemColumns.includes(col.toLowerCase())
+  const hiddenCols = allDatabaseColumns.filter((col) =>
+    hiddenColumns.includes(col.toLowerCase())
   );
 
-  // Add system columns section
-  if (systemCols.length > 0) {
-    const systemSection = document.createElement("div");
-    systemSection.className = "col-12 mb-3";
-    systemSection.innerHTML = `
+  // Add hidden columns section
+  if (hiddenCols.length > 0) {
+    const hiddenSection = document.createElement("div");
+    hiddenSection.className = "col-12 mb-3";
+    hiddenSection.innerHTML = `
             <div class="column-visibility-section">
                 <h6 class="text-muted mb-3">
-                    <i class="fas fa-cog me-1"></i> System Columns (Hidden by Default)
+                    <i class="fas fa-eye-slash me-1"></i> Hidden Columns (Hidden by Default)
                 </h6>
-                <div class="row" id="systemColumns">
+                <div class="row" id="hiddenColumns">
                 </div>
             </div>
         `;
-    container.appendChild(systemSection);
+    container.appendChild(hiddenSection);
 
-    const systemContainer = systemSection.querySelector("#systemColumns");
-    systemCols.forEach((col) => {
+    const hiddenContainer = hiddenSection.querySelector("#hiddenColumns");
+    hiddenCols.forEach((col) => {
       const colDiv = createColumnCheckbox(col, true);
-      systemContainer.appendChild(colDiv);
+      hiddenContainer.appendChild(colDiv);
     });
   }
 
@@ -1557,7 +1761,7 @@ function populateColumnCheckboxes() {
   }
 }
 
-function createColumnCheckbox(columnName, isSystemColumn) {
+function createColumnCheckbox(columnName, isHiddenColumn) {
   const colDiv = document.createElement("div");
   colDiv.className = "col-md-6 col-lg-4 mb-2";
 
@@ -1566,7 +1770,7 @@ function createColumnCheckbox(columnName, isSystemColumn) {
   const isEssentialColumn = essentialColumns.some(
     (essential) => essential.toLowerCase() === columnName.toLowerCase()
   );
-  const shouldDisable = isSystemColumn || isEssentialColumn;
+  const shouldDisable = isHiddenColumn || isEssentialColumn;
 
   colDiv.innerHTML = `
         <div class="form-check">
@@ -1579,12 +1783,12 @@ function createColumnCheckbox(columnName, isSystemColumn) {
             }" for="col-${columnName}">
                 ${displayName}
                 ${
-                  isSystemColumn
-                    ? '<small class="text-muted">(System)</small>'
+                  isHiddenColumn
+                    ? '<small class="text-muted">(Hidden)</small>'
                     : ""
                 }
                 ${
-                  isEssentialColumn && !isSystemColumn
+                  isEssentialColumn && !isHiddenColumn
                     ? '<small class="text-muted">(Essential)</small>'
                     : ""
                 }
@@ -1646,7 +1850,9 @@ function applyColumnVisibility() {
 }
 
 function getVisibleColumns() {
-  return allDatabaseColumns.filter((col) => columnVisibilitySettings[col]);
+  const visibleColumns = allDatabaseColumns.filter((col) => columnVisibilitySettings[col]);
+  
+  return visibleColumns;
 }
 
 function showToast(message, type = "info") {
@@ -1896,5 +2102,102 @@ async function applyGroupingConfiguration() {
   } catch (error) {
     console.error('Error updating grouping configuration:', error);
     showToast("Failed to update grouping configuration. Please try again.", "error");
+  }
+}
+
+// Company History Functions
+async function showCompanyHistory(firmanr) {
+  try {
+    showLoading(true);
+    const response = await fetch(`/api/data/companies/${encodeURIComponent(firmanr)}/history`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch company history');
+    }
+    
+    const history = await response.json();
+    displayCompanyHistoryModal(firmanr, history);
+  } catch (error) {
+    console.error('Error fetching company history:', error);
+    showError('Failed to load company history');
+  } finally {
+    showLoading(false);
+  }
+}
+
+function displayCompanyHistoryModal(firmanr, history) {
+  const modalHTML = `
+    <div class="modal fade" id="companyHistoryModal" tabindex="-1" aria-labelledby="companyHistoryModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="companyHistoryModalLabel">
+              <i class="fas fa-history"></i> History for Company: ${firmanr}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            ${history.length === 0 ? 
+              '<div class="alert alert-info">No history records found for this company.</div>' :
+              `<div class="table-responsive">
+                <table class="table table-striped table-hover">
+                  <thead class="table-dark">
+                    <tr>
+                      <th>Date/Time</th>
+                      <th>Action</th>
+                      <th>Field</th>
+                      <th>Old Value</th>
+                      <th>New Value</th>
+                      <th>Modified By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${history.map(h => `
+                      <tr>
+                        <td>${formatDate(h.timestamp)}</td>
+                        <td>
+                          <span class="badge ${getActionBadgeClass(h.action)}">
+                            ${h.action}
+                          </span>
+                        </td>
+                        <td><strong>${h.columnName}</strong></td>
+                        <td>${h.oldValue || '<em class="text-muted">None</em>'}</td>
+                        <td>${h.newValue || '<em class="text-muted">None</em>'}</td>
+                        <td>${h.modifiedBy}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>`
+            }
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Remove existing modal if present
+  const existingModal = document.getElementById('companyHistoryModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  // Add new modal to body
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+  // Show the modal
+  const modal = new bootstrap.Modal(document.getElementById('companyHistoryModal'));
+  modal.show();
+}
+
+function getActionBadgeClass(action) {
+  switch (action.toUpperCase()) {
+    case 'CREATE': return 'bg-success';
+    case 'UPDATE': return 'bg-warning text-dark';
+    case 'DELETE': return 'bg-danger';
+    default: return 'bg-secondary';
   }
 }

@@ -21,8 +21,28 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
-// Add DataService
-builder.Services.AddScoped<DataService>();
+// Add HttpContextAccessor for user context
+builder.Services.AddHttpContextAccessor();
+
+// Add UserContextService
+builder.Services.AddScoped<UserContextService>();
+
+// Add AuditService first
+builder.Services.AddScoped<AuditService>(provider =>
+{
+    var configuration = provider.GetService<IConfiguration>();
+    var connectionString = configuration?.GetConnectionString("DefaultConnection") 
+        ?? throw new InvalidOperationException("DefaultConnection string not found");
+    return new AuditService(connectionString);
+});
+
+// Add DataService with proper dependencies
+builder.Services.AddScoped<DataService>(provider =>
+{
+    var configuration = provider.GetRequiredService<IConfiguration>();
+    var auditService = provider.GetRequiredService<AuditService>();
+    return new DataService(configuration, auditService);
+});
 
 // Add CORS policy
 builder.Services.AddCors(options =>

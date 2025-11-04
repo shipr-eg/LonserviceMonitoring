@@ -9,76 +9,119 @@ namespace LonserviceMonitoring.Services
     {
         private readonly IConfiguration _configuration;
         private readonly string _connectionString;
+        private readonly AuditService _auditService;
 
-        public DataService(IConfiguration configuration)
+        public DataService(IConfiguration configuration, AuditService auditService)
         {
             _configuration = configuration;
             _connectionString = configuration.GetConnectionString("DefaultConnection") 
                 ?? throw new InvalidOperationException("DefaultConnection string not found");
+            _auditService = auditService;
         }
 
         public async Task<List<CsvDataModel>> GetAllDataAsync()
         {
             var data = new List<CsvDataModel>();
             
-            using var connection = new SqlConnection(_connectionString);
-            await connection.OpenAsync();
-
-            using var command = connection.CreateCommand();
-            // Select all columns - order by Firmanr and Id
-            command.CommandText = "SELECT * FROM CsvData ORDER BY Firmanr, Id";
-
-            using var reader = await command.ExecuteReaderAsync();
-            var columnNames = new List<string>();
-
-            // Get all column names
-            for (int i = 0; i < reader.FieldCount; i++)
+            try
             {
-                columnNames.Add(reader.GetName(i));
-            }
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
 
-            while (await reader.ReadAsync())
-            {
-                var record = new CsvDataModel();
-                var additionalProps = new Dictionary<string, object>();
+                using var command = connection.CreateCommand();
+                
+                // Get all columns from CsvData table joined with CompanyDetails
+                // Hide companies only if ALL their records are "Processed"
+                command.CommandText = @"
+                    SELECT 
+                        c.*,
+                        ISNULL(cd_status.EffectiveStatus, 'Not Started') as CompanyProcessedStatus,
+                        cd_assignee.Assignee as CompanyAssignee,
+                        cd_assignee.AssigneeName as CompanyAssigneeName
+                    FROM CsvData c
+                    LEFT JOIN (
+                        SELECT 
+                            Firmanr,
+                            CASE 
+                                WHEN COUNT(*) = SUM(CASE WHEN ProcessedStatus = 'Processed' THEN 1 ELSE 0 END)
+                                THEN 'Processed'
+                                ELSE MAX(CASE WHEN ProcessedStatus != 'Processed' THEN ProcessedStatus ELSE 'Not Started' END)
+                            END as EffectiveStatus
+                        FROM CompanyDetails 
+                        GROUP BY Firmanr
+                    ) cd_status ON c.Firmanr = cd_status.Firmanr
+                     
+                    LEFT JOIN (
+                        SELECT DISTINCT 
+                            cd.Firmanr,
+                            cd.Assignee,
+                            CONCAT(el.FirstName, ' ', el.LastName) as AssigneeName
+                        FROM CompanyDetails cd
+                        LEFT JOIN EmployeeList el ON cd.Assignee = el.EmployeeID
+                        WHERE cd.Assignee IS NOT NULL
+                    ) cd_assignee ON c.Firmanr = cd_assignee.Firmanr 
+                    WHERE ISNULL(cd_status.EffectiveStatus, 'Not Started') != 'Processed' 
+                    ORDER BY c.CreatedDate DESC";
 
-                for (int i = 0; i < reader.FieldCount; i++)
+                using var reader = await command.ExecuteReaderAsync();
+                
+                while (await reader.ReadAsync())
                 {
-                    var columnName = reader.GetName(i);
-                    var value = reader.IsDBNull(i) ? null : reader.GetValue(i);
-
-                    switch (columnName.ToLower())
+                    try
                     {
-                        case "id":
-                            if (Guid.TryParse(value?.ToString(), out var id))
-                                record.Id = id;
+                        var record = new CsvDataModel();
+                        
+                        // Safely read Id - might be GUID or string
+                        if (!reader.IsDBNull("Id"))
+                        {
+                            var idValue = reader["Id"];
+                            if (idValue is Guid guidId)
+                            {
+                                record.Id = guidId;
+                            }
+                            else if (Guid.TryParse(idValue.ToString(), out var parsedGuid))
+                            {
+                                record.Id = parsedGuid;
+                            }
                             else
-                                record.Id = Guid.NewGuid();
-                            break;
-                        case "company":
-                            record.Company = value?.ToString();
-                            break;
-                        case "confirmed":
-                            record.Confirmed = Convert.ToBoolean(value ?? false);
-                            break;
-                        case "assigneename":
-                            record.AssigneeName = value?.ToString();
-                            break;
-                        case "processedstatus":
-                            record.ProcessedStatus = value?.ToString();
-                            break;
-                        case "notes":
-                            record.Notes = value?.ToString();
-                            break;
-                        default:
-                            // All other columns go into additional properties
-                            additionalProps[columnName] = value ?? "";
-                            break;
+                            {
+                                record.Id = Guid.NewGuid(); // fallback
+                            }
+                        }
+                        else
+                        {
+                            record.Id = Guid.NewGuid();
+                        }
+                        
+                        // Dynamically read all other columns
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            string columnName = reader.GetName(i);
+                            var value = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                            
+                            // Set properties using the dynamic approach
+                            record.SetProperty(columnName, value);
+                        }
+                        
+                        // Set ProcessedStatus from CompanyDetails if available
+                        string recordstatus=record.GetProperty("ProcessedStatus")?.ToString() ?? "";
+                        record.ProcessedStatus =  recordstatus != "" ? recordstatus : "Not Started";
+                        
+                        data.Add(record);
+                    }
+                    catch (Exception rowEx)
+                    {
+                        // Skip this row and continue with next
+                        continue;
                     }
                 }
-
-                record.AdditionalProperties = additionalProps;
-                data.Add(record);
+            }
+            catch (Exception ex)
+            {
+                // Log the actual error instead of silently returning empty list
+                Console.WriteLine($"ERROR in GetAllDataAsync: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                throw; // Re-throw to see the actual error
             }
 
             return data;
@@ -95,6 +138,23 @@ namespace LonserviceMonitoring.Services
 
                 foreach (var change in changes)
                 {
+                    // Get the original values for audit comparison
+                    using var getOriginalCmd = connection.CreateCommand();
+                    getOriginalCmd.Transaction = transaction;
+                    getOriginalCmd.CommandText = "SELECT Confirmed, Notes FROM CsvData WHERE Id = @id";
+                    getOriginalCmd.Parameters.Add(new SqlParameter("@id", change.Id));
+
+                    using var reader = await getOriginalCmd.ExecuteReaderAsync();
+                    bool originalConfirmed = false;
+                    string? originalNotes = null;
+
+                    if (await reader.ReadAsync())
+                    {
+                        originalConfirmed = reader.GetBoolean("Confirmed");
+                        originalNotes = reader.IsDBNull("Notes") ? null : reader.GetString("Notes");
+                    }
+                    reader.Close();
+
                     // Update the main record
                     using var updateCmd = connection.CreateCommand();
                     updateCmd.Transaction = transaction;
@@ -109,7 +169,30 @@ namespace LonserviceMonitoring.Services
 
                     await updateCmd.ExecuteNonQueryAsync();
 
-                    // Log the audit trail
+                    // Log audit trail for each changed field
+                    if (originalConfirmed != change.Confirmed)
+                    {
+                        await LogCsvDataAuditAsync(change.Id, "UPDATE", "Confirmed", 
+                            originalConfirmed.ToString(), change.Confirmed.ToString(), user, connection, transaction);
+                    }
+
+                    if (originalNotes != change.Notes)
+                    {
+                        await LogCsvDataAuditAsync(change.Id, "UPDATE", "Notes", 
+                            originalNotes, change.Notes, user, connection, transaction);
+                    }
+
+                    // Update company counts after each change
+                    if (originalConfirmed != change.Confirmed)
+                    {
+                        var firmanr = change.GetProperty("Firmanr")?.ToString();
+                        if (!string.IsNullOrEmpty(firmanr))
+                        {
+                            await UpdateCompanyCountsInternalAsync(firmanr, user, connection, transaction);
+                        }
+                    }
+
+                    // Log the legacy audit trail for compatibility
                     await LogAuditAsync(change.Id.ToString(), "UPDATE", user, JsonConvert.SerializeObject(change), connection, transaction);
                 }
 
@@ -121,6 +204,109 @@ namespace LonserviceMonitoring.Services
                 // Log error
                 Console.WriteLine($"Error saving changes: {ex.Message}");
                 return false;
+            }
+        }
+
+        private async Task LogCsvDataAuditAsync(Guid recordId, string action, string columnName, 
+            string? oldValue, string? newValue, string modifiedBy, SqlConnection connection, SqlTransaction transaction)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = @"
+                INSERT INTO CsvDataAudit (RecordId, Action, ColumnName, OldValue, NewValue, ModifiedBy, Timestamp)
+                VALUES (@recordId, @action, @columnName, @oldValue, @newValue, @modifiedBy, GETUTCDATE())";
+
+            command.Parameters.AddWithValue("@recordId", recordId);
+            command.Parameters.AddWithValue("@action", action);
+            command.Parameters.AddWithValue("@columnName", columnName);
+            command.Parameters.AddWithValue("@oldValue", oldValue ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@newValue", newValue ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@modifiedBy", modifiedBy);
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        private async Task UpdateCompanyCountsInternalAsync(string firmanr, string modifiedBy, 
+            SqlConnection connection, SqlTransaction transaction)
+        {
+            // Get current counts
+            using var getCountsCommand = connection.CreateCommand();
+            getCountsCommand.Transaction = transaction;
+            getCountsCommand.CommandText = @"
+                SELECT 
+                    COUNT(*) as TotalRows,
+                    SUM(CASE WHEN Confirmed = 1 THEN 1 ELSE 0 END) as ProcessedRows
+                FROM CsvData 
+                WHERE Firmanr = @firmanr";
+            getCountsCommand.Parameters.AddWithValue("@firmanr", firmanr);
+
+            using var reader = await getCountsCommand.ExecuteReaderAsync();
+            int totalRows = 0, processedRows = 0;
+
+            if (await reader.ReadAsync())
+            {
+                totalRows = reader.GetInt32("TotalRows");
+                processedRows = reader.GetInt32("ProcessedRows");
+            }
+            reader.Close();
+
+            // Get current company details
+            using var getCurrentCommand = connection.CreateCommand();
+            getCurrentCommand.Transaction = transaction;
+            getCurrentCommand.CommandText = @"
+                SELECT GUID, TotalRows, TotalRowsProcessed 
+                FROM CompanyDetails 
+                WHERE Firmanr = @firmanr";
+            getCurrentCommand.Parameters.AddWithValue("@firmanr", firmanr);
+
+            using var currentReader = await getCurrentCommand.ExecuteReaderAsync();
+            Guid companyId = Guid.Empty;
+            int currentTotalRows = 0, currentProcessedRows = 0;
+
+            if (await currentReader.ReadAsync())
+            {
+                companyId = currentReader.GetGuid("GUID");
+                currentTotalRows = currentReader.GetInt32("TotalRows");
+                currentProcessedRows = currentReader.GetInt32("TotalRowsProcessed");
+            }
+            currentReader.Close();
+
+            // Update if there are changes
+            bool totalChanged = currentTotalRows != totalRows;
+            bool processedChanged = currentProcessedRows != processedRows;
+
+            if (totalChanged || processedChanged)
+            {
+                // Log audit entries for changes
+                if (totalChanged)
+                {
+                    await _auditService.LogCompanyDetailsAuditAsync(companyId, "UPDATE", "TotalRows", 
+                        currentTotalRows.ToString(), totalRows.ToString(), modifiedBy);
+                }
+
+                if (processedChanged)
+                {
+                    await _auditService.LogCompanyDetailsAuditAsync(companyId, "UPDATE", "TotalRowsProcessed", 
+                        currentProcessedRows.ToString(), processedRows.ToString(), modifiedBy);
+                }
+
+                // Update the company details
+                using var updateCommand = connection.CreateCommand();
+                updateCommand.Transaction = transaction;
+                updateCommand.CommandText = @"
+                    UPDATE CompanyDetails 
+                    SET TotalRows = @totalRows, 
+                        TotalRowsProcessed = @processedRows,
+                        LastModified = GETUTCDATE(),
+                        LastModifiedBy = @modifiedBy
+                    WHERE Firmanr = @firmanr";
+
+                updateCommand.Parameters.AddWithValue("@totalRows", totalRows);
+                updateCommand.Parameters.AddWithValue("@processedRows", processedRows);
+                updateCommand.Parameters.AddWithValue("@modifiedBy", modifiedBy);
+                updateCommand.Parameters.AddWithValue("@firmanr", firmanr);
+
+                await updateCommand.ExecuteNonQueryAsync();
             }
         }
 
@@ -261,17 +447,17 @@ namespace LonserviceMonitoring.Services
 
             using var command = connection.CreateCommand();
             command.CommandText = @"
-                SELECT Company, Assignee, ProcessedStatus, Created 
+                SELECT GUID, Firmanr, Assignee, ProcessedStatus, Created 
                 FROM CompanyDetails 
-                ORDER BY Company";
+                ORDER BY Firmanr";
 
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
                 companies.Add(new CompanyDetails
                 {
-                    // CompanyID = reader.IsDBNull("CompanyID") ? 0 : Convert.ToInt32(reader["CompanyID"]),
-                    Company = reader.IsDBNull("Company") ? "" : reader["Company"].ToString() ?? "",
+                    Id = reader.GetGuid("GUID"),
+                    Firmanr = reader.IsDBNull("Firmanr") ? "" : reader["Firmanr"].ToString() ?? "",
                     Assignee = reader.IsDBNull("Assignee") ? 0 : Convert.ToInt32(reader["Assignee"]),
                     ProcessedStatus = reader.IsDBNull("ProcessedStatus") ? "" : reader["ProcessedStatus"].ToString() ?? "",
                     Created = reader["Created"] == DBNull.Value ? null : Convert.ToDateTime(reader["Created"])
@@ -289,12 +475,9 @@ namespace LonserviceMonitoring.Services
             await connection.OpenAsync();
 
             using var command = connection.CreateCommand();
-            // command.CommandText = @"
-            //     SELECT Company, Assignee, ProcessedStatus, TotalRecords, ContactedRecords, Created
-            //     FROM CompanyDetails 
-            //     WHERE Company = @companyName";
             command.CommandText = @"SELECT 
-                    cd.Company,
+                    cd.GUID,
+                    cd.Firmanr,
                     cd.Assignee,
                     el.FirstName + ' ' + el.LastName AS AssigneeName,
                     cd.ProcessedStatus,
@@ -302,7 +485,7 @@ namespace LonserviceMonitoring.Services
                 FROM CompanyDetails cd
                 LEFT JOIN EmployeeList el 
                     ON cd.Assignee = el.EmployeeID
-                WHERE cd.Company = @companyName
+                WHERE cd.Firmanr = @companyName
                 ORDER BY cd.Created DESC";
 
 
@@ -313,7 +496,8 @@ namespace LonserviceMonitoring.Services
             {
                 companies.Add(new CompanyDetails
                 {
-                    Company = reader.IsDBNull("Company") ? "" : reader["Company"].ToString() ?? "",
+                    Id = reader.GetGuid("GUID"),
+                    Firmanr = reader.IsDBNull("Firmanr") ? "" : reader["Firmanr"].ToString() ?? "",
                     Assignee = reader.IsDBNull("Assignee") ? 0 : Convert.ToInt32(reader["Assignee"]),
                     AssigneeName = reader.IsDBNull("AssigneeName") ? "" : reader["AssigneeName"].ToString() ?? "",
                     ProcessedStatus = reader.IsDBNull("ProcessedStatus") ? "" : reader["ProcessedStatus"].ToString() ?? "",
@@ -325,7 +509,7 @@ namespace LonserviceMonitoring.Services
             return companies;
         }
 
-        public async Task<int> InsertCompanyDetailsAsync(CompanyDetails company)
+        public async Task<int> InsertCompanyDetailsAsync(CompanyDetails company, string user = "System")
         {
             try
             {
@@ -335,23 +519,26 @@ namespace LonserviceMonitoring.Services
                 // Check if a record with the same company name exists
                 bool recordExists = false;
                 CompanyDetails existing = null;
+                Guid? companyId = null;
                 
                 using (var checkCommand = connection.CreateCommand())
                 {
                     checkCommand.CommandText = @"
-                        SELECT TOP 1 Company, Assignee, ProcessedStatus
+                        SELECT TOP 1 GUID, Firmanr, Assignee, ProcessedStatus
                         FROM CompanyDetails
-                        WHERE Company = @company
+                        WHERE Firmanr = @firmanr
                         ORDER BY Created DESC";
-                    checkCommand.Parameters.Add(new SqlParameter("@company", company.Company));
+                    checkCommand.Parameters.Add(new SqlParameter("@firmanr", company.Firmanr));
 
                     using var reader = await checkCommand.ExecuteReaderAsync();
                     if (await reader.ReadAsync())
                     {
                         recordExists = true;
+                        companyId = reader.GetGuid("GUID");
                         existing = new CompanyDetails
                         {
-                            Company = reader.IsDBNull("Company") ? null : reader.GetString("Company"),
+                            Id = companyId.Value,
+                            Firmanr = reader.IsDBNull("Firmanr") ? null : reader.GetString("Firmanr"),
                             Assignee = reader.IsDBNull("Assignee") ? null : reader.GetInt32("Assignee"),
                             ProcessedStatus = reader.IsDBNull("ProcessedStatus") ? null : reader.GetString("ProcessedStatus")
                         };
@@ -360,40 +547,77 @@ namespace LonserviceMonitoring.Services
 
                 int rowsAffected = 0;
 
-                if (recordExists)
+                if (recordExists && companyId.HasValue)
                 {
-                    // Update existing record
+                    // Update existing record with audit logging
                     using var updateCommand = connection.CreateCommand();
                     updateCommand.CommandText = @"
                         UPDATE CompanyDetails 
                         SET Assignee = @assignee, 
                             ProcessedStatus = @processedStatus,
-                            Created = GETDATE()
-                        WHERE Company = @company";
+                            LastModified = GETUTCDATE(),
+                            LastModifiedBy = @modifiedBy
+                        WHERE Firmanr = @firmanr";
 
                     // Use provided values or keep existing ones if new values are null/empty
                     var assigneeToUpdate = company.Assignee ?? existing?.Assignee;
                     var statusToUpdate = string.IsNullOrEmpty(company.ProcessedStatus) ? existing?.ProcessedStatus : company.ProcessedStatus;
 
-                    updateCommand.Parameters.Add(new SqlParameter("@company", company.Company));
+                    updateCommand.Parameters.Add(new SqlParameter("@firmanr", company.Firmanr));
                     updateCommand.Parameters.Add(new SqlParameter("@assignee", (object?)assigneeToUpdate ?? DBNull.Value));
                     updateCommand.Parameters.Add(new SqlParameter("@processedStatus", (object?)statusToUpdate ?? DBNull.Value));
+                    updateCommand.Parameters.Add(new SqlParameter("@modifiedBy", user));
 
                     rowsAffected = await updateCommand.ExecuteNonQueryAsync();
+
+                    // Log audit trail for changed fields
+                    if (existing?.Assignee != assigneeToUpdate)
+                    {
+                        await _auditService.LogCompanyDetailsAuditAsync(companyId.Value, "UPDATE", "Assignee", 
+                            existing?.Assignee?.ToString(), assigneeToUpdate?.ToString(), user);
+                    }
+
+                    if (existing?.ProcessedStatus != statusToUpdate)
+                    {
+                        await _auditService.LogCompanyDetailsAuditAsync(companyId.Value, "UPDATE", "ProcessedStatus", 
+                            existing?.ProcessedStatus, statusToUpdate, user);
+                    }
                 }
                 else
                 {
-                    // Insert new record
+                    // Insert new record with audit logging
                     using var insertCommand = connection.CreateCommand();
                     insertCommand.CommandText = @"
-                        INSERT INTO CompanyDetails (Company, Assignee, ProcessedStatus)
-                        VALUES (@company, @assignee, @processedStatus)";
+                        INSERT INTO CompanyDetails (GUID, Firmanr, Assignee, ProcessedStatus, Created, LastModified, LastModifiedBy)
+                        OUTPUT INSERTED.GUID
+                        VALUES (NEWID(), @firmanr, @assignee, @processedStatus, GETUTCDATE(), GETUTCDATE(), @modifiedBy)";
 
-                    insertCommand.Parameters.Add(new SqlParameter("@company", company.Company));
+                    insertCommand.Parameters.Add(new SqlParameter("@firmanr", company.Firmanr));
                     insertCommand.Parameters.Add(new SqlParameter("@assignee", (object?)company.Assignee ?? DBNull.Value));
                     insertCommand.Parameters.Add(new SqlParameter("@processedStatus", (object?)company.ProcessedStatus ?? DBNull.Value));
+                    insertCommand.Parameters.Add(new SqlParameter("@modifiedBy", user));
 
-                    rowsAffected = await insertCommand.ExecuteNonQueryAsync();
+                    var newId = await insertCommand.ExecuteScalarAsync();
+                    if (newId != null && Guid.TryParse(newId.ToString(), out var newCompanyId))
+                    {
+                        rowsAffected = 1;
+                        
+                        // Log audit trail for insert
+                        await _auditService.LogCompanyDetailsAuditAsync(newCompanyId, "INSERT", "Firmanr", 
+                            null, company.Firmanr, user);
+                        
+                        if (company.Assignee.HasValue)
+                        {
+                            await _auditService.LogCompanyDetailsAuditAsync(newCompanyId, "INSERT", "Assignee", 
+                                null, company.Assignee.ToString(), user);
+                        }
+                        
+                        if (!string.IsNullOrEmpty(company.ProcessedStatus))
+                        {
+                            await _auditService.LogCompanyDetailsAuditAsync(newCompanyId, "INSERT", "ProcessedStatus", 
+                                null, company.ProcessedStatus, user);
+                        }
+                    }
                 }
 
                 return rowsAffected > 0 ? 1 : 0; // Return 1 for success, 0 for failure

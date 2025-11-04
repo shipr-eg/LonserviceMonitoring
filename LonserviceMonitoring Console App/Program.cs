@@ -48,7 +48,14 @@ namespace LonserviceMonitoring
                         ?? context.Configuration.GetSection("DatabaseSettings:ConnectionString").Value;
                     
                     services.AddDbContext<LonserviceContext>(options =>
-                        options.UseSqlServer(connectionString));
+                    {
+                        options.UseSqlServer(connectionString);
+                        // Disable OUTPUT clause due to database triggers
+                        options.UseSqlServer(connectionString, sqlOptions => 
+                        {
+                            sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                        });
+                    });
 
                     // Services
                     services.AddTransient<IFolderInitializationService, FolderInitializationService>();

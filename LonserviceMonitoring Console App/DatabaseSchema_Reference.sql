@@ -19,7 +19,7 @@ CREATE TABLE [dbo].[CsvData] (
     [TimeBlock] nvarchar(max) NOT NULL DEFAULT '',
     
     -- CSV Column Mappings (configurable in appsettings.json)
-    [Company] nvarchar(max) NULL,
+    [Firmanr] nvarchar(max) NULL,
     [Department] nvarchar(max) NULL,
     [Employee_ID] nvarchar(max) NULL,
     [Employee_Name] nvarchar(max) NULL,
@@ -109,6 +109,46 @@ CREATE NONCLUSTERED INDEX [IX_CsvProcessingHistory_TimeBlock] ON [CsvProcessingH
 CREATE NONCLUSTERED INDEX [IX_CsvProcessingHistory_ProcessedDate] ON [CsvProcessingHistory] ([ProcessedDate]);
 
 -- =============================================================================
+-- 5. CompanyDetails Table - Company/Firmanr processing tracking
+-- =============================================================================
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CompanyDetails' AND xtype='U')
+CREATE TABLE [dbo].[CompanyDetails] (
+    [Id] uniqueidentifier NOT NULL DEFAULT NEWID(),
+    [Firmanr] nvarchar(450) NOT NULL,
+    [Assignee] int NULL,
+    [ProcessedStatus] nvarchar(max) NULL DEFAULT 'NotStarted',
+    [Created] datetime2 NOT NULL DEFAULT GETUTCDATE(),
+    
+    CONSTRAINT [PK_CompanyDetails] PRIMARY KEY ([Id])
+);
+
+-- Indexes for performance
+CREATE NONCLUSTERED INDEX [IX_CompanyDetails_Firmanr] ON [CompanyDetails] ([Firmanr]);
+CREATE NONCLUSTERED INDEX [IX_CompanyDetails_ProcessedStatus] ON [CompanyDetails] ([ProcessedStatus]);
+
+-- =============================================================================
+-- 6. EmployeeList Table - Employee tracking and processing
+-- =============================================================================
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='EmployeeList' AND xtype='U')
+CREATE TABLE [dbo].[EmployeeList] (
+    [Id] uniqueidentifier NOT NULL DEFAULT NEWID(),
+    [Firmanr] nvarchar(450) NOT NULL,
+    [EmployeeId] nvarchar(450) NOT NULL,
+    [EmployeeName] nvarchar(max) NULL,
+    [Department] nvarchar(max) NULL,
+    [Assignee] int NULL,
+    [ProcessedStatus] nvarchar(max) NULL DEFAULT 'NotStarted',
+    [Created] datetime2 NOT NULL DEFAULT GETUTCDATE(),
+    
+    CONSTRAINT [PK_EmployeeList] PRIMARY KEY ([Id])
+);
+
+-- Indexes for performance
+CREATE NONCLUSTERED INDEX [IX_EmployeeList_Firmanr] ON [EmployeeList] ([Firmanr]);
+CREATE NONCLUSTERED INDEX [IX_EmployeeList_EmployeeId] ON [EmployeeList] ([EmployeeId]);
+CREATE NONCLUSTERED INDEX [IX_EmployeeList_ProcessedStatus] ON [EmployeeList] ([ProcessedStatus]);
+
+-- =============================================================================
 -- Database Features Summary
 -- =============================================================================
 /*
@@ -125,12 +165,14 @@ This database schema provides:
 Key Configuration (in appsettings.json):
 - CsvSettings.Delimiter = ";"
 - CsvSettings.AutoDetectDelimiter = true
-- DefaultColumns: Company, Department, Employee_ID, Employee_Name, Payroll_Error_Type, Amount
+- DefaultColumns: Firmanr, Department, Employee_ID, Employee_Name, Payroll_Error_Type, Amount
 
 The application will:
 - Detect semicolon delimiters automatically
 - Create database tables on first run
-- Process CSV files with Danish column names
+- Process CSV files with Danish column names (Firmanr)
+- Extract Firmanr values to populate CompanyDetails table
+- Track unique employees in EmployeeList table
 - Track all changes with audit logs
 - Provide detailed processing history
 */

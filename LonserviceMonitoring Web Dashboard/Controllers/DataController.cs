@@ -10,11 +10,15 @@ namespace LonserviceMonitoring.Controllers
     public class DataController : ControllerBase
     {
         private readonly DataService _dataService;
+        private readonly AuditService _auditService;
+        private readonly UserContextService _userContextService;
         private readonly DashboardConfiguration _dashboardConfig;
 
-        public DataController(DataService dataService, IOptions<DashboardConfiguration> dashboardConfig)
+        public DataController(DataService dataService, AuditService auditService, UserContextService userContextService, IOptions<DashboardConfiguration> dashboardConfig)
         {
             _dataService = dataService;
+            _auditService = auditService;
+            _userContextService = userContextService;
             _dashboardConfig = dashboardConfig.Value;
         }
 
@@ -38,7 +42,7 @@ namespace LonserviceMonitoring.Controllers
         {
             try
             {
-                var user = HttpContext.Session.GetString("AdminUser") ?? "Anonymous";
+                var user = _userContextService.GetCurrentUserForAudit();
                 var success = await _dataService.SaveChangesAsync(request.Changes, user);
                 
                 if (success)
@@ -154,11 +158,13 @@ namespace LonserviceMonitoring.Controllers
                     return BadRequest(ModelState);
                 }
 
-                if (string.IsNullOrWhiteSpace(company.Company))
+                if (string.IsNullOrWhiteSpace(company.Firmanr))
                 {
-                    return BadRequest(new { message = "Company name is required" });
+                    return BadRequest(new { message = "Firmanr is required" });
                 }
-                await _dataService.InsertCompanyDetailsAsync(company);
+                
+                var user = _userContextService.GetCurrentUserForAudit();
+                await _dataService.InsertCompanyDetailsAsync(company, user);
                 return Ok(company);
             }
             catch (Exception ex)
@@ -183,6 +189,35 @@ namespace LonserviceMonitoring.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error updating grouping configuration", error = ex.Message });
+            }
+        }
+
+        [HttpGet("companies/{firmanr}/history")]
+        public async Task<ActionResult<List<CompanyHistoryModel>>> GetCompanyHistory(string firmanr)
+        {
+            try
+            {
+                var history = await _auditService.GetCompanyHistoryAsync(firmanr);
+                return Ok(history);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving company history", error = ex.Message });
+            }
+        }
+
+        [HttpPost("companies/{firmanr}/update-counts")]
+        public async Task<ActionResult> UpdateCompanyCounts(string firmanr)
+        {
+            try
+            {
+                var user = _userContextService.GetCurrentUserForAudit();
+                await _auditService.UpdateCompanyTotalCountsAsync(firmanr, user);
+                return Ok(new { message = "Company counts updated successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error updating company counts", error = ex.Message });
             }
         }
     }

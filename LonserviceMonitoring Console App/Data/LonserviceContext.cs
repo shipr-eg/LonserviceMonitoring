@@ -15,6 +15,13 @@ namespace LonserviceMonitoring.Data
         public DbSet<ProcessingLog> ProcessingLogs { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<CsvProcessingHistory> CsvProcessingHistory { get; set; }
+        public DbSet<CompanyDetails> CompanyDetails { get; set; }
+        public DbSet<EmployeeList> EmployeeList { get; set; }
+        
+        // New audit tables
+        public DbSet<CsvDataAudit> CsvDataAudit { get; set; }
+        public DbSet<CompanyDetailsAudit> CompanyDetailsAudit { get; set; }
+        public DbSet<EmployeeListAudit> EmployeeListAudit { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -63,11 +70,100 @@ namespace LonserviceMonitoring.Data
                 entity.HasIndex(e => e.TimeBlock);
                 entity.HasIndex(e => e.ProcessedDate);
             });
+
+            // Configure CompanyDetails
+            modelBuilder.Entity<CompanyDetails>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("GUID").HasDefaultValueSql("NEWID()");
+                entity.Property(e => e.Created).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasIndex(e => e.Firmanr);
+                entity.Property(e => e.ProcessedStatus).HasDefaultValue("Not Started");
+            });
+
+            // Configure EmployeeList
+            modelBuilder.Entity<EmployeeList>(entity =>
+            {
+                entity.HasKey(e => e.GUID);
+                entity.Property(e => e.GUID).HasDefaultValueSql("NEWID()");
+                entity.HasIndex(e => e.EmployeeID);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.IsAdmin).HasDefaultValue(false);
+            });
+
+            // Configure audit tables
+            modelBuilder.Entity<CsvDataAudit>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("NEWID()");
+                entity.Property(e => e.Timestamp).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasIndex(e => new { e.RecordId, e.Timestamp });
+                entity.HasIndex(e => e.ColumnName);
+            });
+
+            modelBuilder.Entity<CompanyDetailsAudit>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("NEWID()");
+                entity.Property(e => e.Timestamp).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasIndex(e => new { e.RecordId, e.Timestamp });
+                entity.HasIndex(e => e.ColumnName);
+            });
+
+            modelBuilder.Entity<EmployeeListAudit>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasDefaultValueSql("NEWID()");
+                entity.Property(e => e.Timestamp).HasDefaultValueSql("GETUTCDATE()");
+                entity.HasIndex(e => new { e.RecordId, e.Timestamp });
+                entity.HasIndex(e => e.ColumnName);
+            });
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             GenerateAuditEntries();
+            
+            // Check for CompanyDetails updates which may conflict with triggers
+            var companyDetailsEntries = ChangeTracker.Entries<CompanyDetails>()
+                .Where(e => e.State == EntityState.Modified)
+                .ToList();
+            
+            if (companyDetailsEntries.Any())
+            {
+                // Handle CompanyDetails updates manually to avoid OUTPUT clause conflicts with triggers
+                var result = 0;
+                
+                foreach (var entry in companyDetailsEntries)
+                {
+                    var entity = entry.Entity;
+                    var sql = @"UPDATE CompanyDetails 
+                               SET Assignee = @p0, Created = @p1, Firmanr = @p2, LastModified = @p3, 
+                                   LastModifiedBy = @p4, ProcessedStatus = @p5, TotalRows = @p6, TotalRowsProcessed = @p7
+                               WHERE GUID = @p8";
+                    
+                    var parameters = new[]
+                    {
+                        new Microsoft.Data.SqlClient.SqlParameter("@p0", entity.Assignee ?? (object)DBNull.Value),
+                        new Microsoft.Data.SqlClient.SqlParameter("@p1", entity.Created),
+                        new Microsoft.Data.SqlClient.SqlParameter("@p2", entity.Firmanr ?? (object)DBNull.Value),
+                        new Microsoft.Data.SqlClient.SqlParameter("@p3", entity.LastModified),
+                        new Microsoft.Data.SqlClient.SqlParameter("@p4", entity.LastModifiedBy ?? (object)DBNull.Value),
+                        new Microsoft.Data.SqlClient.SqlParameter("@p5", entity.ProcessedStatus ?? (object)DBNull.Value),
+                        new Microsoft.Data.SqlClient.SqlParameter("@p6", entity.TotalRows),
+                        new Microsoft.Data.SqlClient.SqlParameter("@p7", entity.TotalRowsProcessed),
+                        new Microsoft.Data.SqlClient.SqlParameter("@p8", entity.Id)
+                    };
+                    
+                    result += await Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken);
+                    entry.State = EntityState.Unchanged; // Mark as unchanged to avoid double processing
+                }
+                
+                // Save other changes normally
+                var otherChanges = await base.SaveChangesAsync(cancellationToken);
+                return result + otherChanges;
+            }
+            
             return await base.SaveChangesAsync(cancellationToken);
         }
 
