@@ -8,6 +8,7 @@ let isAdmin = false;
 let currentPage = 1;
 const recordsPerPage = 10;
 let employeesLists = [];
+let isShowingSearchResults = false; // Track if we're showing search results
 
 // Language and Translation System
 let currentLanguage = 'en'; // Default to English
@@ -53,7 +54,103 @@ const translations = {
     waiting: "Waiting",
     processed: "Processed",
     yes: "Yes",
-    no: "No"
+    no: "No",
+    unknown: "Unknown",
+    close: "Close",
+    // History modal
+    history: "History",
+    history_for_company: "History for Company",
+    no_history_records: "No history records found for this company.",
+    date_time: "Date/Time",
+    action: "Action",
+    field: "Field", 
+    old_value: "Old Value",
+    new_value: "New Value",
+    modified_by: "Modified By",
+    none: "None",
+    // Notes column and input
+    notes_column: "Notes",
+    add_notes_placeholder: "Add notes...",
+    // Common Notes values translations
+    notes_pending: "Pending",
+    notes_completed: "Completed",
+    notes_in_review: "In Review",
+    notes_approved: "Approved",
+    notes_rejected: "Rejected",
+    notes_follow_up: "Follow up required",
+    notes_urgent: "Urgent",
+    notes_resolved: "Resolved",
+    notes_cancelled: "Cancelled",
+    notes_on_hold: "On Hold",
+    // Column headers (including Danish originals)
+    firmanr: "Company Number",
+    notes: "Notes",
+    createdate: "Created Date",
+    modifieddate: "Modified Date",
+    assigneename: "Assignee Name",
+    processedstatus: "Processed Status",
+    timeblock: "Time Block",
+    confirmed: "Confirmed",
+    sourcefilename: "Source File Name",
+    companyassignee: "Company Assignee",
+    companyassigneename: "Company Assignee Name",
+    koncernnr_: "Group Number",
+    medarbejdernr: "Employee Number",
+    listenummer: "List Number",
+    l_nart: "Wage Type",
+    sats: "Rate",
+    // Form controls and labels
+    search_within_company: "Search within",
+    clear_group_filters: "Clear filters for this group",
+    showing_records: "Showing",
+    of_records: "of",
+    records: "records",
+    page_size: "Page size",
+    previous: "Previous",
+    next: "Next",
+    page: "Page",
+    select_page_size: "Select page size",
+    // Status options
+    status_not_started: "Not Started",
+    status_in_progress: "In Progress", 
+    status_waiting: "Waiting",
+    status_processed: "Processed",
+    // Buttons and actions
+    expand_group: "Expand group",
+    collapse_group: "Collapse group",
+    // Form controls and labels
+    search_within_company: "Search within {company}...",
+    filter_placeholder: "Filter {column}...",
+    showing_records: "Showing",
+    of_records: "of",
+    records: "records",
+    records_per_page: "records per page",
+    page: "Page",
+    previous: "Previous",
+    next: "Next",
+    // Status options in English
+    not_started_status: "Not Started",
+    in_progress_status: "In Progress",
+    waiting_status: "Waiting", 
+    processed_status: "Processed",
+    // Common form elements
+    select_option: "Select...",
+    search_placeholder: "Search...",
+    no_results_found: "No results found",
+    loading_data: "Loading data...",
+    error_loading_data: "Error loading data",
+    // Actions
+    save_changes: "Save Changes",
+    cancel: "Cancel",
+    delete: "Delete",
+    edit: "Edit",
+    view: "View",
+    add: "Add",
+    remove: "Remove",
+    // Pagination
+    first_page: "First page",
+    last_page: "Last page",
+    items_per_page: "Items per page"
   },
   da: {
     dashboard_title: "Lønservice Overvågning Dashboard",
@@ -95,7 +192,103 @@ const translations = {
     waiting: "Venter",
     processed: "Behandlet",
     yes: "Ja",
-    no: "Nej"
+    no: "Nej",
+    unknown: "Ukendt",
+    close: "Luk",
+    // History modal
+    history: "Historik",
+    history_for_company: "Historik for Virksomhed",
+    no_history_records: "Ingen historikposter fundet for denne virksomhed.",
+    date_time: "Dato/Tid",
+    action: "Handling",
+    field: "Felt", 
+    old_value: "Gammel Værdi",
+    new_value: "Ny Værdi",
+    modified_by: "Ændret Af",
+    none: "Ingen",
+    // Notes column and input
+    notes_column: "Noter",
+    add_notes_placeholder: "Tilføj noter...",
+    // Common Notes values translations in Danish
+    notes_pending: "Afventende",
+    notes_completed: "Afsluttet",
+    notes_in_review: "Under Gennemgang",
+    notes_approved: "Godkendt",
+    notes_rejected: "Afvist",
+    notes_follow_up: "Opfølgning Påkrævet",
+    notes_urgent: "Hastende",
+    notes_resolved: "Løst",
+    notes_cancelled: "Annulleret", 
+    notes_on_hold: "På Standby",
+    // Column headers (including Danish originals)
+    firmanr: "Firmanummer",
+    notes: "Noter",
+    createdate: "Oprettelsesdato",
+    modifieddate: "Ændringsdato",
+    assigneename: "Tildelt Navn",
+    processedstatus: "Behandlingsstatus",
+    timeblock: "Tidsblok",
+    confirmed: "Bekræftet",
+    sourcefilename: "Kildefil Navn",
+    companyassignee: "Virksomhedstildelt",
+    companyassigneename: "Virksomhedstildelt Navn",
+    koncernnr_: "Koncernnummer",
+    medarbejdernr: "Medarbejdernummer",
+    listenummer: "Listenummer",
+    l_nart: "Lønart",
+    sats: "Sats",
+    // Form controls and labels
+    search_within_company: "Søg inden for",
+    clear_group_filters: "Ryd filtre for denne gruppe",
+    showing_records: "Viser",
+    of_records: "af",
+    records: "poster",
+    page_size: "Sidestørrelse",
+    previous: "Forrige",
+    next: "Næste", 
+    page: "Side",
+    select_page_size: "Vælg sidestørrelse",
+    // Status options
+    status_not_started: "Ikke Startet",
+    status_in_progress: "I Gang",
+    status_waiting: "Venter",
+    status_processed: "Behandlet",
+    // Buttons and actions
+    expand_group: "Udvid gruppe",
+    collapse_group: "Sammenfold gruppe",
+    // Form controls and labels
+    search_within_company: "Søg inden for {company}...",
+    filter_placeholder: "Filter {column}...",
+    showing_records: "Viser",
+    of_records: "af",
+    records: "poster",
+    records_per_page: "poster pr. side",
+    page: "Side",
+    previous: "Forrige",
+    next: "Næste",
+    // Status options in Danish
+    not_started_status: "Ikke Startet",
+    in_progress_status: "I Gang", 
+    waiting_status: "Venter",
+    processed_status: "Behandlet",
+    // Common form elements
+    select_option: "Vælg...",
+    search_placeholder: "Søg...",
+    no_results_found: "Ingen resultater fundet",
+    loading_data: "Indlæser data...",
+    error_loading_data: "Fejl ved indlæsning af data",
+    // Actions
+    save_changes: "Gem Ændringer",
+    cancel: "Annuller",
+    delete: "Slet",
+    edit: "Rediger",
+    view: "Se",
+    add: "Tilføj",
+    remove: "Fjern",
+    // Pagination
+    first_page: "Første side",
+    last_page: "Sidste side",
+    items_per_page: "Elementer pr. side"
   }
 };
 
@@ -143,17 +336,27 @@ function translatePage() {
     }
   });
   
+  // Re-create global filter dropdowns to update their text
+  if (typeof createCompanyFilter === 'function') {
+    createCompanyFilter();
+  }
+  
   // Re-render the dashboard to update dynamic content
   if (allData.length > 0) {
-    renderDashboard();
+    renderGroupedData();
   }
 }
 
 // Initialize language from localStorage
 function initializeLanguage() {
+  // Only load saved language if it's different from default English
   const savedLanguage = localStorage.getItem('preferredLanguage');
-  if (savedLanguage && translations[savedLanguage]) {
+  if (savedLanguage && savedLanguage !== 'en' && translations[savedLanguage]) {
     currentLanguage = savedLanguage;
+  } else {
+    // Ensure English is default and remove any stored non-English preference
+    currentLanguage = 'en';
+    localStorage.removeItem('preferredLanguage');
   }
   updateLanguageDisplay();
   translatePage();
@@ -164,6 +367,19 @@ function t(key) {
   return translations[currentLanguage][key] || key;
 }
 
+// Debounce function for performance optimization
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
 // Column visibility settings
 let columnVisibilitySettings = {};
 let allDatabaseColumns = [];
@@ -171,6 +387,17 @@ let hiddenColumns = [];
 let essentialColumns = [];
 let dashboardConfig = null;
 const statusOptions = ["Not Started", "In Progress", "Waiting", "Processed"];
+
+// Helper function to get translated status label
+function getTranslatedStatus(status) {
+  const statusMap = {
+    'Not Started': t('not_started_status'),
+    'In Progress': t('in_progress_status'), 
+    'Waiting': t('waiting_status'),
+    'Processed': t('processed_status')
+  };
+  return statusMap[status] || status;
+}
 
 // Toast management
 const saveToast = new bootstrap.Toast(document.getElementById("saveToast"), {
@@ -199,9 +426,13 @@ document.addEventListener("DOMContentLoaded", function () {
 // Setup event listeners
 function setupEventListeners() {
   // Global search
-  document
-    .getElementById("globalSearch")
-    .addEventListener("input", debounce(performGlobalSearch, 300));
+  const globalSearchInput = document.getElementById("globalSearch");
+  if (globalSearchInput) {
+    globalSearchInput.addEventListener("input", debounce(performGlobalSearch, 300));
+    console.log("Global search event listener attached successfully");
+  } else {
+    console.error("Global search input element not found!");
+  }
 
   // Toast auto-hide after 10 seconds
   document
@@ -273,7 +504,7 @@ async function initializeDashboard() {
     createCompanyFilter();
 
     processAndDisplayData();
-    filterCompanyBasedOnStatusnAssignee(statusOptions[0], null);
+    // Show all data initially without any filters applied
     showLoading(false);
   } catch (error) {
     console.error("Error initializing dashboard:", error);
@@ -287,6 +518,8 @@ function processAndDisplayData() {
   console.log("=== processAndDisplayData START ===");
   console.log("allData length:", allData.length);
   console.log("allData sample:", allData.length > 0 ? allData[0] : "no data");
+  
+  isShowingSearchResults = false; // Reset flag when processing all data
   
   // Initialize column visibility settings first
   initializeColumnVisibility();
@@ -419,10 +652,12 @@ function renderGroupedData() {
       const groupElement = createCompanyGroup(company, groupData, columns);
       container.appendChild(groupElement);
 
-      // Apply default confirmed filter after DOM is ready
-      setTimeout(() => {
-        applyGroupFilters(company);
-      }, 0);
+      // Only apply group filters if we're not showing search results
+      if (!isShowingSearchResults) {
+        setTimeout(() => {
+          applyGroupFilters(company);
+        }, 0);
+      }
     });
 
   container.style.display = "block";
@@ -487,12 +722,11 @@ function createCompanyFilter() {
                   <i class="fas fa-filter"></i>
               </span>
               <select id="statusFilter" class="form-control form-select input-sm" onchange="filterCompanyBasedOnStatusnAssignee(this.value, getCurrentAssigneeFilter())">
+                  <option value="" selected>${t('select_status')}</option>
                   ${statusOptions
                     .map(
                       (status) =>
-                        `<option ${
-                          status === statusOptions[0] ? "selected" : ""
-                        } value="${status}">${status}</option>`
+                        `<option value="${status}">${getTranslatedStatus(status)}</option>`
                     )
                     .join("")}
               </select>
@@ -504,11 +738,11 @@ function createCompanyFilter() {
                   <i class="fas fa-tags"></i>
               </span>
               <select id="assigneeFilter" class="form-control form-select input-sm" onchange="filterCompanyBasedOnStatusnAssignee(getCurrentStatusFilter(), this.value)">
-                  <option value=""> Select Assignee</option>
+                  <option value="" selected>${t('select_employee')}</option>
                   ${employeesLists
                     .map(
                       (emp) =>
-                        `<option value="${emp.fullName}"> ${emp.fullName}</option>`
+                        `<option value="${emp.fullName}">${emp.fullName}</option>`
                     )
                     .join("")}
               </select>
@@ -576,12 +810,12 @@ function createCompanyGroup(company, data, columns) {
                             (status) => ` 
                                 <option value="${status}" ${
                               processedStatus === status ? "selected" : ""
-                            }>${status}</option>
+                            }>${getTranslatedStatus(status)}</option>
                             `
                           )
                           .join("")}  
                         </select>
-                        <button class="btn btn-sm btn-outline-info ms-2" onclick="showCompanyHistory('${company}'); event.stopPropagation();" title="View Company History">
+                        <button class="btn btn-sm btn-outline-info ms-2" onclick="showCompanyHistory('${company}'); event.stopPropagation();" title="${t('view_company_history')}">
                             <i class="fas fa-history"></i> ${t('history')}
                         </button>
                     </div>
@@ -599,7 +833,7 @@ function createCompanyGroup(company, data, columns) {
                         <span class="input-group-text">
                             <i class="fas fa-search"></i>
                         </span>
-                        <input type="text" class="form-control" placeholder="Search within ${company}..." 
+                        <input type="text" class="form-control" placeholder="${t('search_within_company').replace('{company}', company)}" 
                                onkeyup="searchWithinGroup('${company}', this.value)">
                         <button class="btn btn-outline-secondary" onclick="clearGroupFilters('${company}')">
                             <i class="fas fa-times"></i>
@@ -700,6 +934,16 @@ function getColumnWidth(columnName) {
 
 // Format column name
 function formatColumnName(columnName) {
+  if (!columnName || typeof columnName !== 'string') {
+    return String(columnName || 'Unknown');
+  }
+  
+  // Only translate the Notes column
+  if (columnName.toLowerCase() === 'notes') {
+    return t('notes_column');
+  }
+  
+  // For all other columns, just format them properly without translation
   return (
     columnName.charAt(0).toUpperCase() +
     columnName.slice(1).replace(/([A-Z])/g, " $1")
@@ -721,7 +965,7 @@ function createColumnFilter(columnName, company) {
   } else {
     return `
             <input type="text" class="filter-input" id="${filterId}" 
-                   placeholder="Filter ${formatColumnName(columnName)}..." 
+                   placeholder="${t('filter_placeholder').replace('{column}', formatColumnName(columnName))}" 
                    onkeyup="debounce(() => filterByColumn('${company}', '${columnName}', this.value), 300)()">
         `;
   }
@@ -764,7 +1008,7 @@ function renderTableCell(record, columnName, company) {
                 <input type="text" class="form-control notes-input" 
                        value="${value || ""}" 
                        onchange="updateNotes('${record.id}', this.value)"
-                       placeholder="Add notes...">
+                       placeholder="${t('add_notes_placeholder')}">
             </td>
         `;
   } else if (columnName.toLowerCase() === "createddate") {
@@ -1118,25 +1362,77 @@ function performGlobalSearch() {
     .getElementById("globalSearch")
     .value.toLowerCase();
 
+  console.log("=== performGlobalSearch called ===");
+  console.log("Search term:", searchTerm);
+
   if (!searchTerm) {
-    // Reset all data
-    processAndDisplayData();
+    console.log("No search term, resetting to filtered data based on dropdowns");
+    isShowingSearchResults = false; // Reset flag
+    // Reset to filtered data based on current dropdown selections
+    const currentStatus = getCurrentStatusFilter();
+    const currentAssignee = getCurrentAssigneeFilter();
+    filterCompanyBasedOnStatusnAssignee(currentStatus, currentAssignee);
     return;
   }
 
-  // Filter all data
-  const filteredData = allData.filter((record) => {
-    return Object.values(record).some(
+  console.log("Filtering allData, total records:", allData.length);
+
+  // Start with all data, then apply filters
+  let dataToFilter = allData;
+  
+  // Apply status and assignee filters first if they exist
+  const currentStatus = getCurrentStatusFilter();
+  const currentAssignee = getCurrentAssigneeFilter();
+  
+  if (currentStatus || currentAssignee) {
+    dataToFilter = allData.filter((record) => {
+      const actualAssigneeName = record.CompanyAssigneeName || record.assigneeName;
+      
+      if (currentStatus && currentAssignee) {
+        return record.processedStatus === currentStatus && actualAssigneeName === currentAssignee;
+      } else if (currentStatus) {
+        return record.processedStatus === currentStatus;
+      } else if (currentAssignee) {
+        return actualAssigneeName === currentAssignee;
+      }
+      return true;
+    });
+  }
+
+  // Apply global search - ONLY show records that match the search term
+  const filteredData = dataToFilter.filter((record) => {
+    const matches = Object.values(record).some(
       (value) => value && value.toString().toLowerCase().includes(searchTerm)
     );
+    if (matches) {
+      console.log("Record matches search:", record.firmanr, "- found in:", 
+        Object.entries(record).filter(([key, value]) => 
+          value && value.toString().toLowerCase().includes(searchTerm)
+        ).map(([key, value]) => `${key}: ${value}`)
+      );
+    }
+    return matches;
   });
 
-  // Regroup and display
+  console.log("Filtered data length:", filteredData.length);
+
+  // Regroup and display - this will group by company but only show matching records
   if (filteredData.length > 0) {
+    console.log("Regrouping filtered data");
+    isShowingSearchResults = true; // Set flag to prevent applyGroupFilters
     groupedData = groupDataByCompany(filteredData);
     renderGroupedData();
+    
+    // Auto-expand all accordions when showing search results
+    setTimeout(() => {
+      expandAllGroups();
+      console.log("Auto-expanded all groups for search results");
+    }, 100);
   } else {
-    console.log("performGlobalSearch: No filtered data, keeping existing groupedData");
+    console.log("performGlobalSearch: No filtered data, showing empty result");
+    isShowingSearchResults = true; // Set flag even for empty results
+    groupedData = {};
+    renderGroupedData();
   }
 }
 
@@ -1155,34 +1451,67 @@ function getCurrentAssigneeFilter() {
 
 // perform Assignment or Status change
 function filterCompanyBasedOnStatusnAssignee(processedStatus, assignee) {
+  console.log("=== filterCompanyBasedOnStatusnAssignee called ===");
+  console.log("processedStatus:", processedStatus);
+  console.log("assignee:", assignee);
+  console.log("allData length:", allData.length);
+
+  // Check if global search is active
+  const globalSearchTerm = document.getElementById("globalSearch").value.toLowerCase();
+  console.log("Global search term:", globalSearchTerm);
+
+  // Don't reset search results flag if global search is active
+  if (!globalSearchTerm) {
+    isShowingSearchResults = false; // Only reset flag when no global search
+  }
+
   const filteredData = allData.filter((record) => {
+    // Get the actual assignee name (prioritize CompanyAssigneeName over assigneeName)
+    const actualAssigneeName = record.CompanyAssigneeName || record.assigneeName;
+    
+    // First apply status and assignee filters
+    let matchesFilters = true;
+    
     // If in case of both values provided Status and assignee
     if (processedStatus && assignee) {
-      return (
-        record.processedStatus === processedStatus &&
-        record.assigneeName === assignee
-      );
+      matchesFilters = record.processedStatus === processedStatus && actualAssigneeName === assignee;
     }
-    // If in case of only stuatus
+    // If in case of only status
     else if (processedStatus) {
-      return record.processedStatus === processedStatus;
+      matchesFilters = record.processedStatus === processedStatus;
     }
     // If in case of only assignee
     else if (assignee) {
-      return record.assigneeName === assignee;
+      matchesFilters = actualAssigneeName === assignee;
     }
-    // rest case
+    // If no status/assignee filters, all records match the filter criteria
     else {
-      return true;
+      matchesFilters = true;
     }
+    
+    // If global search is active, also apply global search filter
+    if (globalSearchTerm && matchesFilters) {
+      const matchesSearch = Object.values(record).some(
+        (value) => value && value.toString().toLowerCase().includes(globalSearchTerm)
+      );
+      return matchesSearch;
+    }
+    
+    return matchesFilters;
   });
+  
+  console.log("Filtered data length:", filteredData.length);
   
   // Update the display with filtered data
   if (filteredData.length > 0) {
+    console.log("Regrouping filtered data by company");
     groupedData = groupDataByCompany(filteredData);
     renderGroupedData();
   } else {
-    console.log("filterCompanyBasedOnStatusnAssignee: No filtered data, keeping existing groupedData");
+    console.log("filterCompanyBasedOnStatusnAssignee: No filtered data, showing empty result");
+    // Show empty state instead of keeping old data
+    groupedData = {};
+    renderGroupedData();
   }
 }
 
@@ -1332,11 +1661,87 @@ function clearGroupFilters(company) {
 }
 
 function clearAllFilters() {
-  document.getElementById("globalSearch").value = "";
+  console.log("=== clearAllFilters called ===");
+  
+  isShowingSearchResults = false; // Reset flag when clearing filters
+  
+  // Clear global search
+  const globalSearch = document.getElementById("globalSearch");
+  if (globalSearch) globalSearch.value = "";
+  
+  // Clear status filter
+  const statusFilter = document.getElementById("statusFilter");
+  if (statusFilter) statusFilter.value = "";
+  
+  // Clear assignee filter  
+  const assigneeFilter = document.getElementById("assigneeFilter");
+  if (assigneeFilter) assigneeFilter.value = "";
+  
+  // Clear group-level filters
   Object.keys(groupedData).forEach((company) => {
     clearGroupFilters(company);
   });
+  
+  // Reset to show all data
   processAndDisplayData();
+}
+
+// Expand all company accordions
+function expandAllGroups() {
+  Object.keys(groupedData).forEach((company) => {
+    const companyId = company.replace(/\s+/g, "-").toLowerCase();
+    const collapseElement = document.getElementById(`collapse-${companyId}`);
+    const iconElement = document.getElementById(`icon-${companyId}`);
+    
+    if (collapseElement && iconElement) {
+      // Expand the accordion
+      if (!collapseElement.classList.contains('show')) {
+        collapseElement.classList.add('show');
+        iconElement.classList.remove('fa-chevron-down');
+        iconElement.classList.add('fa-chevron-up');
+        console.log(`Expanded accordion for company: ${company}`);
+      }
+    }
+  });
+}
+
+// Collapse all company accordions  
+function collapseAllGroups() {
+  Object.keys(groupedData).forEach((company) => {
+    const companyId = company.replace(/\s+/g, "-").toLowerCase();
+    const collapseElement = document.getElementById(`collapse-${companyId}`);
+    const iconElement = document.getElementById(`icon-${companyId}`);
+    
+    if (collapseElement && iconElement) {
+      // Collapse the accordion
+      if (collapseElement.classList.contains('show')) {
+        collapseElement.classList.remove('show');
+        iconElement.classList.remove('fa-chevron-up');
+        iconElement.classList.add('fa-chevron-down');
+        console.log(`Collapsed accordion for company: ${company}`);
+      }
+    }
+  });
+}
+
+// Toggle individual company accordion
+function toggleCompanyAccordion(companyId) {
+  const collapseElement = document.getElementById(`collapse-${companyId}`);
+  const iconElement = document.getElementById(`icon-${companyId}`);
+  
+  if (collapseElement && iconElement) {
+    if (collapseElement.classList.contains('show')) {
+      // Collapse
+      collapseElement.classList.remove('show');
+      iconElement.classList.remove('fa-chevron-up');
+      iconElement.classList.add('fa-chevron-down');
+    } else {
+      // Expand
+      collapseElement.classList.add('show');
+      iconElement.classList.remove('fa-chevron-down');
+      iconElement.classList.add('fa-chevron-up');
+    }
+  }
 }
 
 // Update summary counts
@@ -1908,7 +2313,7 @@ function populateCompanyHistoryTable(data, tableBody) {
       <td>${record.assigneeName || "N/A"}</td>
       <td>
         <span class="badge ${getProcessedStatusBadge(record.processedStatus)}">
-          ${record.processedStatus || "Unknown"}
+          ${getTranslatedStatus(record.processedStatus) || t('unknown')}
         </span>
       </td>
       <td>${formatDate(record.created)}</td>
@@ -1985,7 +2390,12 @@ function formatColumnName(column) {
     return String(column || 'Unknown');
   }
   
-  // Convert camelCase or lowercase to Title Case
+  // Only translate the Notes column
+  if (column.toLowerCase() === 'notes') {
+    return t('notes_column');
+  }
+  
+  // For all other columns, just format them properly without translation
   return column
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, str => str.toUpperCase())
@@ -2132,23 +2542,23 @@ function displayCompanyHistoryModal(firmanr, history) {
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="companyHistoryModalLabel">
-              <i class="fas fa-history"></i> History for Company: ${firmanr}
+              <i class="fas fa-history"></i> ${t('history_for_company')}: ${firmanr}
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
             ${history.length === 0 ? 
-              '<div class="alert alert-info">No history records found for this company.</div>' :
+              `<div class="alert alert-info">${t('no_history_records')}</div>` :
               `<div class="table-responsive">
                 <table class="table table-striped table-hover">
                   <thead class="table-dark">
                     <tr>
-                      <th>Date/Time</th>
-                      <th>Action</th>
-                      <th>Field</th>
-                      <th>Old Value</th>
-                      <th>New Value</th>
-                      <th>Modified By</th>
+                      <th>${t('date_time')}</th>
+                      <th>${t('action')}</th>
+                      <th>${t('field')}</th>
+                      <th>${t('old_value')}</th>
+                      <th>${t('new_value')}</th>
+                      <th>${t('modified_by')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2161,8 +2571,8 @@ function displayCompanyHistoryModal(firmanr, history) {
                           </span>
                         </td>
                         <td><strong>${h.columnName}</strong></td>
-                        <td>${h.oldValue || '<em class="text-muted">None</em>'}</td>
-                        <td>${h.newValue || '<em class="text-muted">None</em>'}</td>
+                        <td>${h.oldValue || `<em class="text-muted">${t('none')}</em>`}</td>
+                        <td>${h.newValue || `<em class="text-muted">${t('none')}</em>`}</td>
                         <td>${h.modifiedBy}</td>
                       </tr>
                     `).join('')}
@@ -2172,7 +2582,7 @@ function displayCompanyHistoryModal(firmanr, history) {
             }
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${t('close')}</button>
           </div>
         </div>
       </div>
