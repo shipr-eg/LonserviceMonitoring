@@ -108,7 +108,8 @@ namespace LonserviceMonitoring.Services
                         _logger.LogInformation("Found existing CSV file: {FileName}", fileName);
                         _processedFiles[fileName] = lastModified;
                         CsvFileDetected?.Invoke(this, file);
-                        await Task.Delay(100); // Small delay between files
+                        // Longer delay to ensure sequential processing and avoid DbContext conflicts
+                        await Task.Delay(2000);
                     }
                 }
 
@@ -137,7 +138,8 @@ namespace LonserviceMonitoring.Services
                         _logger.LogInformation("Periodic scan detected CSV file: {FileName}", fileName);
                         _processedFiles[fileName] = lastModified;
                         CsvFileDetected?.Invoke(this, file);
-                        await Task.Delay(100); // Small delay between files
+                        // Longer delay to ensure sequential processing and avoid DbContext conflicts
+                        await Task.Delay(2000);
                     }
                 }
             }

@@ -57,13 +57,13 @@ namespace LonserviceMonitoring
                         });
                     });
 
-                    // Services
-                    services.AddTransient<IFolderInitializationService, FolderInitializationService>();
-                    services.AddTransient<IFolderMonitoringService, FolderMonitoringService>();
-                    services.AddTransient<IEmailMonitoringService, EmailMonitoringService>();
-                    services.AddTransient<ICsvProcessingService, CsvProcessingService>();
-                    services.AddTransient<ILoggingService, LoggingService>();
-                    services.AddTransient<IDatabaseSchemaService, DatabaseSchemaService>();
+                    // Services - Register as Scoped to ensure each scope gets its own instances
+                    services.AddScoped<IFolderInitializationService, FolderInitializationService>();
+                    services.AddSingleton<IFolderMonitoringService, FolderMonitoringService>();
+                    services.AddSingleton<IEmailMonitoringService, EmailMonitoringService>();
+                    services.AddScoped<ICsvProcessingService, CsvProcessingService>();
+                    services.AddScoped<ILoggingService, LoggingService>();
+                    services.AddScoped<IDatabaseSchemaService, DatabaseSchemaService>();
 
                     // Background service
                     services.AddHostedService<MonitoringService>();
