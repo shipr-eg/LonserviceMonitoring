@@ -6,7 +6,7 @@ namespace LonserviceMonitoring.Models
     public class CsvDataModel
     {
         public Guid Id { get; set; }
-        public string? Company { get; set; }
+        public string? Firmanr { get; set; }
         public DateTime CreatedDate { get; set; }
         public bool Confirmed { get; set; }
         public string? Notes { get; set; }
@@ -35,6 +35,17 @@ namespace LonserviceMonitoring.Models
         public string User { get; set; } = string.Empty;
         public string RecordId { get; set; } = string.Empty;
         public string Changes { get; set; } = string.Empty;
+        public string? Firmanr { get; set; }
+    }
+
+    public class CompanyHistoryModel
+    {
+        public DateTime Timestamp { get; set; }
+        public string Action { get; set; } = string.Empty;
+        public string ColumnName { get; set; } = string.Empty;
+        public string? OldValue { get; set; }
+        public string? NewValue { get; set; }
+        public string ModifiedBy { get; set; } = string.Empty;
     }
 
     public class DataUpdateNotification
@@ -48,6 +59,45 @@ namespace LonserviceMonitoring.Models
     {
         public List<string> SystemColumns { get; set; } = new();
         public List<string> EssentialColumns { get; set; } = new();
+        public List<string> EssentialColumnsSuffix { get; set; } = new();
+        public GroupingConfiguration? Grouping { get; set; }
+    }
+
+    public class GroupingConfiguration
+    {
+        public bool EnableGrouping { get; set; }
+        public string GroupByColumn { get; set; } = "firmanr";
+        public string SortByColumn { get; set; } = "createddate";
+        public string SortDirection { get; set; } = "desc";
+    }
+
+    public class CsvProcessingHistory
+    {
+        public Guid Id { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        public string TimeBlock { get; set; } = string.Empty;
+        public DateTime ProcessedDate { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public int RecordsProcessed { get; set; }
+        public int RecordsSkipped { get; set; }
+        public string ProcessingLog { get; set; } = string.Empty;
+        public string? ErrorMessage { get; set; }
+        public string SourcePath { get; set; } = string.Empty;
+        public string WorkPath { get; set; } = string.Empty;
+        public string? LoadedPath { get; set; }
+    }
+
+    public class ProcessingLog
+    {
+        public Guid Id { get; set; }
+        public DateTime Timestamp { get; set; }
+        public string LogLevel { get; set; } = string.Empty;
+        public string Source { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string? FileName { get; set; }
+        public string? TimeBlock { get; set; }
+        public string? Exception { get; set; }
+        public string AdditionalData { get; set; } = string.Empty;
     }
 
     public class EmployeeList

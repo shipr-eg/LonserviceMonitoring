@@ -143,6 +143,20 @@ namespace LonserviceMonitoring.Controllers
             }
         }
 
+        [HttpGet("companies/{firmanr}/history")]
+        public async Task<ActionResult<List<CompanyHistoryModel>>> GetCompanyHistory(string firmanr)
+        {
+            try
+            {
+                var history = await _dataService.GetCompanyHistoryAsync(firmanr);
+                return Ok(history);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving company history", error = ex.Message });
+            }
+        }
+
         [HttpPost("companies")]
         public async Task<ActionResult<CompanyDetails>> CreateCompany([FromBody] CompanyDetails company)
         {
