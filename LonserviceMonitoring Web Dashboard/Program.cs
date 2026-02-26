@@ -2,8 +2,20 @@ using Microsoft.Data.SqlClient;
 using System.Data;
 using LonserviceMonitoring.Services;
 using LonserviceMonitoring.Models;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure Serilog for file-based logging
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.File(
+        path: Path.Combine(AppContext.BaseDirectory, "logs", "app-.txt"),
+        rollingInterval: RollingInterval.Day,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
@@ -64,7 +76,7 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-// Set default port to 8080
-app.Urls.Add("http://localhost:8080");
+// Note: When running under IIS, URLs are managed by IIS, not by the app
+// For development, configure URLs in appsettings.json or launchSettings.json
 
 app.Run();

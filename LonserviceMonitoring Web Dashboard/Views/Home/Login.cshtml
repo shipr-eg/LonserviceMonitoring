@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lønservice Monitoring - Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            animation: float 15s infinite ease-in-out;
+        }
+
+        @@keyframes float {
+            0%, 100% {
+                transform: translateY(0) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.5;
+            }
+            90% {
+                opacity: 0.5;
+            }
+            100% {
+                transform: translateY(-100vh) translateX(100px);
+                opacity: 0;
+            }
+        }
+
+        .login-container {
+            position: relative;
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 60px 50px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 450px;
+            width: 90%;
+            animation: slideIn 0.8s ease-out;
+        }
+
+        @@keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .logo i {
+            font-size: 40px;
+            color: white;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 40px;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .input-wrapper {
+            display: flex;
+            align-items: center;
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 15px 20px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .input-wrapper:focus-within {
+            background: white;
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .input-icon {
+            color: #999;
+            margin-right: 15px;
+            font-size: 18px;
+            transition: color 0.3s ease;
+        }
+
+        .input-wrapper:focus-within .input-icon {
+            color: #667eea;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            color: #333;
+            outline: none;
+            font-family: 'Poppins', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 500;
+        }
+
+        input::placeholder {
+            color: #999;
+            text-transform: none;
+            letter-spacing: normal;
+            font-weight: 400;
+        }
+
+        .arrow-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-left: 10px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .arrow-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .arrow-button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .arrow-button:hover {
+            transform: translateX(5px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.5);
+        }
+
+        .arrow-button:active {
+            transform: translateX(5px) scale(0.95);
+        }
+
+        .arrow-button i {
+            color: white;
+            font-size: 20px;
+            position: relative;
+            z-index: 1;
+            transition: transform 0.3s ease;
+        }
+
+        .arrow-button:hover i {
+            transform: translateX(3px);
+        }
+
+        .error-message {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+            animation: shake 0.5s;
+        }
+
+        @@keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @@keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading .loading-spinner {
+            display: block;
+        }
+
+        .loading .arrow-icon {
+            display: none;
+        }
+
+        .fade-out {
+            animation: fadeOut 0.6s ease-out forwards;
+        }
+
+        @@keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+        }
+
+        .helper-text {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #999;
+        }
+
+        .helper-text i {
+            color: #667eea;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="particles" id="particles"></div>
+    
+    <div class="login-container" id="loginContainer">
+        <div class="logo">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <h1>Welcome Back</h1>
+        <p class="subtitle">Enter your initials to continue</p>
+        
+        <form id="loginForm">
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <i class="fas fa-user input-icon"></i>
+                    <input 
+                        type="text" 
+                        id="initialsInput" 
+                        name="initials"
+                        placeholder="Enter your initials" 
+                        maxlength="5"
+                        autocomplete="off"
+                        autofocus
+                        required
+                    />
+                    <button type="submit" class="arrow-button" id="loginButton">
+                        <i class="fas fa-arrow-right arrow-icon"></i>
+                        <div class="loading-spinner"></div>
+                    </button>
+                </div>
+                <div class="error-message" id="errorMessage">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="errorText">Invalid initials. Please try again.</span>
+                </div>
+            </div>
+        </form>
+
+        <div class="helper-text">
+            <i class="fas fa-info-circle"></i>
+            Use your 5-character employee initials
+        </div>
+    </div>
+
+    <script>
+        // Create floating particles
+        const particlesContainer = document.getElementById('particles');
+        for (let i = 0; i < 50; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 15 + 's';
+            particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
+            particlesContainer.appendChild(particle);
+        }
+
+        // Login form handling
+        const loginForm = document.getElementById('loginForm');
+        const initialsInput = document.getElementById('initialsInput');
+        const loginButton = document.getElementById('loginButton');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorText = document.getElementById('errorText');
+        const loginContainer = document.getElementById('loginContainer');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const initials = initialsInput.value.trim().toUpperCase();
+            
+            if (!initials) {
+                showError('Please enter your initials');
+                return;
+            }
+
+            if (initials.length > 5) {
+                showError('Initials must be 5 characters or less');
+                return;
+            }
+
+            // Show loading state
+            loginButton.classList.add('loading');
+            errorMessage.classList.remove('show');
+
+            try {
+                const response = await fetch('/api/data/validate-initials', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ initials: initials })
+                });
+
+                const result = await response.json();
+
+                if (result.isValid) {
+                    // Success! Fade out and redirect
+                    loginContainer.classList.add('fade-out');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 600);
+                } else {
+                    loginButton.classList.remove('loading');
+                    showError(result.message || 'Invalid initials. Please check and try again.');
+                }
+            } catch (error) {
+                loginButton.classList.remove('loading');
+                showError('Connection error. Please try again.');
+                console.error('Login error:', error);
+            }
+        });
+
+        function showError(message) {
+            errorText.textContent = message;
+            errorMessage.classList.add('show');
+            initialsInput.focus();
+        }
+
+        // Auto-uppercase input
+        initialsInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
+        // Clear error on typing
+        initialsInput.addEventListener('input', () => {
+            errorMessage.classList.remove('show');
+        });
+    </script>
+</body>
+</html>

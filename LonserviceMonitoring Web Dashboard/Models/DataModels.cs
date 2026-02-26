@@ -7,6 +7,8 @@ namespace LonserviceMonitoring.Models
     {
         public Guid Id { get; set; }
         public string? Firmanr { get; set; }
+        public string? Koncernnr_ { get; set; }
+        public string? SourceFileName { get; set; }
         public DateTime CreatedDate { get; set; }
         public bool Confirmed { get; set; }
         public string? Notes { get; set; }
@@ -19,12 +21,20 @@ namespace LonserviceMonitoring.Models
     public class SaveChangesRequest
     {
         public List<CsvDataModel> Changes { get; set; } = new();
+        public string? User { get; set; }
     }
 
     public class AdminLoginRequest
     {
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class EmployeeLoginRequest
+    {
+        [Required]
+        [StringLength(5, MinimumLength = 1)]
+        public string Initials { get; set; } = string.Empty;
     }
 
     public class AuditLogModel
@@ -36,6 +46,7 @@ namespace LonserviceMonitoring.Models
         public string RecordId { get; set; } = string.Empty;
         public string Changes { get; set; } = string.Empty;
         public string? Firmanr { get; set; }
+        public string? SourceFilename { get; set; }
     }
 
     public class CompanyHistoryModel
@@ -46,6 +57,8 @@ namespace LonserviceMonitoring.Models
         public string? OldValue { get; set; }
         public string? NewValue { get; set; }
         public string ModifiedBy { get; set; } = string.Empty;
+        public string? SourceFilename { get; set; }
+        public string? CompanyDetails { get; set; }
     }
 
     public class DataUpdateNotification
@@ -66,7 +79,8 @@ namespace LonserviceMonitoring.Models
     public class GroupingConfiguration
     {
         public bool EnableGrouping { get; set; }
-        public string GroupByColumn { get; set; } = "firmanr";
+        public string? GroupByColumn { get; set; } = "firmanr"; // Legacy single column support
+        public List<string>? GroupByColumns { get; set; } // New multi-column grouping
         public string SortByColumn { get; set; } = "createddate";
         public string SortDirection { get; set; } = "desc";
     }
@@ -106,6 +120,7 @@ namespace LonserviceMonitoring.Models
         public string EmployeeID { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
+        public string Initials { get; set; } = string.Empty;
         
         public bool IsAdmin { get; set; }
         public bool IsActive { get; set; }

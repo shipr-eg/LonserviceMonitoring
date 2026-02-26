@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using LonserviceMonitoring.Models;
 using System.Data;
 using Newtonsoft.Json;
+using Microsoft.Extensions.Logging;
 
 namespace LonserviceMonitoring.Services
 {
@@ -9,11 +10,29 @@ namespace LonserviceMonitoring.Services
     {
         private readonly SqlConnection _connection;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<DataService> _logger;
 
-        public DataService(IDbConnection connection, IConfiguration configuration)
+        public DataService(IDbConnection connection, IConfiguration configuration, ILogger<DataService> logger)
         {
             _connection = (SqlConnection)connection;
             _configuration = configuration;
+            _logger = logger;
+        }
+
+        // Helper method to extract Firmanr from composite key "Firmanr | Koncernnr_"
+        private string ExtractFirmanr(string compositeKey)
+        {
+            if (string.IsNullOrWhiteSpace(compositeKey))
+                return compositeKey;
+
+            // Check if it contains the separator (with or without spaces)
+            if (compositeKey.Contains("|"))
+            {
+                // Split and take the first part, trimming any spaces
+                return compositeKey.Split('|')[0].Trim();
+            }
+
+            return compositeKey.Trim();
         }
 
         public async Task<List<CsvDataModel>> GetAllDataAsync()
@@ -30,10 +49,10 @@ namespace LonserviceMonitoring.Services
                 c.*,
                 cd.ProcessedStatus,
                 (e.FirstName + ' ' + e.LastName) AS AssigneeName
-            FROM [LonserviceMonitoringDB].[dbo].[CsvData] AS c
-            LEFT JOIN [LonserviceMonitoringDB].[dbo].[CompanyDetails] AS cd 
+            FROM [dbo].[CsvData] AS c
+            LEFT JOIN [dbo].[CompanyDetails] AS cd 
                 ON c.Firmanr = cd.Firmanr
-            LEFT JOIN [LonserviceMonitoringDB].[dbo].[EmployeeList] AS e 
+            LEFT JOIN [dbo].[EmployeeList] AS e 
                 ON e.EmployeeID = cd.Assignee";
             
             using var reader = await command.ExecuteReaderAsync();
@@ -67,6 +86,14 @@ namespace LonserviceMonitoring.Services
                             break;
                         case "firmanr":
                             record.Firmanr = value?.ToString();
+                            additionalProps[columnName] = value ?? "";
+                            break;
+                        case "koncernnr_":
+                            record.Koncernnr_ = value?.ToString();
+                            additionalProps[columnName] = value ?? "";
+                            break;
+                        case "sourcefilename":
+                            record.SourceFileName = value?.ToString();
                             additionalProps[columnName] = value ?? "";
                             break;
                         case "createddate":
@@ -112,9 +139,6 @@ namespace LonserviceMonitoring.Services
                     await _connection.OpenAsync();
 
                 using var transaction = _connection.BeginTransaction();
-
-                // Get Windows username
-                var systemUser = Environment.UserName;
 
                 foreach (var change in changes)
                 {
@@ -182,10 +206,17 @@ namespace LonserviceMonitoring.Services
                     if (changesList.Count > 0)
                     {
                         var changesJson = JsonConvert.SerializeObject(changesList);
-                        var firmanr = oldRecord?.Firmanr ?? change.Firmanr;
                         
-                        // Log the audit trail with RecordId (GUID), Firmanr, and system username
-                        await LogAuditAsync(change.Id.ToString(), "UPDATE", systemUser, changesJson, firmanr, transaction);
+                        // Build composite key for CompanyDetails
+                        var firmanr = oldRecord?.Firmanr ?? change.Firmanr;
+                        var koncernnr = oldRecord?.Koncernnr_ ?? change.Koncernnr_;
+                        var companyDetails = !string.IsNullOrEmpty(koncernnr) ? $"{firmanr} | {koncernnr}" : firmanr;
+                        
+                        // Use SourceFileName from top-level property
+                        var sourceFilename = change.SourceFileName;
+                        
+                        // Log the audit trail with RecordId (GUID), CompanyDetails (composite key), SourceFileName, and the logged-in user from session
+                        await LogAuditAsync(change.Id.ToString(), "UPDATE", user, changesJson, companyDetails, sourceFilename, transaction);
                     }
                 }
 
@@ -194,8 +225,8 @@ namespace LonserviceMonitoring.Services
             }
             catch (Exception ex)
             {
-                // Log error
-                Console.WriteLine($"Error saving changes: {ex.Message}");
+                // Log error with full details for Serilog
+                _logger.LogError(ex, "Error saving changes: {ErrorMessage}", ex.Message);
                 return false;
             }
         }
@@ -247,13 +278,14 @@ namespace LonserviceMonitoring.Services
             if (_connection.State != ConnectionState.Open)
                 await _connection.OpenAsync();
 
+            // Use the full composite key for CompanyDetails lookup
             using var command = _connection.CreateCommand();
             command.CommandText = @"
-                SELECT Timestamp, Action, [User], Changes, RecordId, Firmanr
+                SELECT Timestamp, Action, [User], Changes, RecordId, CompanyDetails, SourceFilename
                 FROM AuditLog
-                WHERE Firmanr = @firmanr
+                WHERE CompanyDetails = @companyDetails
                 ORDER BY Timestamp DESC";
-            command.Parameters.Add(new SqlParameter("@firmanr", firmanr));
+            command.Parameters.Add(new SqlParameter("@companyDetails", firmanr));
 
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -262,6 +294,12 @@ namespace LonserviceMonitoring.Services
                 var action = reader.GetString("Action");
                 var timestamp = reader.GetDateTime("Timestamp");
                 var user = reader.GetString("User");
+                var sourceFilename = reader.IsDBNull(reader.GetOrdinal("SourceFilename")) 
+                    ? null 
+                    : reader.GetString("SourceFilename");
+                var companyDetails = reader.IsDBNull(reader.GetOrdinal("CompanyDetails")) 
+                    ? null 
+                    : reader.GetString("CompanyDetails");
 
                 // Parse the changes JSON to extract field-level changes
                 try
@@ -278,7 +316,9 @@ namespace LonserviceMonitoring.Services
                                 ColumnName = change.ContainsKey("Field") ? change["Field"].ToString() ?? "" : "",
                                 OldValue = change.ContainsKey("OldValue") ? change["OldValue"]?.ToString() : null,
                                 NewValue = change.ContainsKey("NewValue") ? change["NewValue"]?.ToString() : null,
-                                ModifiedBy = user
+                                ModifiedBy = user,
+                                SourceFilename = sourceFilename,
+                                CompanyDetails = companyDetails
                             });
                         }
                     }
@@ -293,7 +333,9 @@ namespace LonserviceMonitoring.Services
                         ColumnName = "Multiple Fields",
                         OldValue = null,
                         NewValue = changes,
-                        ModifiedBy = user
+                        ModifiedBy = user,
+                        SourceFilename = sourceFilename,
+                        CompanyDetails = companyDetails
                     });
                 }
             }
@@ -322,20 +364,21 @@ namespace LonserviceMonitoring.Services
             };
         }
 
-        private async Task LogAuditAsync(string recordId, string action, string user, string changes, string firmanr, SqlTransaction transaction)
+        private async Task LogAuditAsync(string recordId, string action, string user, string changes, string companyDetails, string? sourceFilename, SqlTransaction transaction)
         {
             using var auditCmd = _connection.CreateCommand();
             auditCmd.Transaction = transaction;
             auditCmd.CommandText = @"
-                INSERT INTO AuditLog (Timestamp, Action, [User], RecordId, Changes, Firmanr)
-                VALUES (@timestamp, @action, @user, @recordId, @changes, @firmanr)";
+                INSERT INTO [dbo].[AuditLog] (Timestamp, Action, [User], RecordId, Changes, CompanyDetails, SourceFilename)
+                VALUES (@timestamp, @action, @user, @recordId, @changes, @companyDetails, @sourceFilename)";
 
             auditCmd.Parameters.Add(new SqlParameter("@timestamp", DateTime.Now));
             auditCmd.Parameters.Add(new SqlParameter("@action", action));
             auditCmd.Parameters.Add(new SqlParameter("@user", user));
             auditCmd.Parameters.Add(new SqlParameter("@recordId", recordId));
             auditCmd.Parameters.Add(new SqlParameter("@changes", changes));
-            auditCmd.Parameters.Add(new SqlParameter("@firmanr", (object)firmanr ?? DBNull.Value));
+            auditCmd.Parameters.Add(new SqlParameter("@companyDetails", (object)companyDetails ?? DBNull.Value));
+            auditCmd.Parameters.Add(new SqlParameter("@sourceFilename", (object)sourceFilename ?? DBNull.Value));
 
             await auditCmd.ExecuteNonQueryAsync();
         }
@@ -369,7 +412,7 @@ namespace LonserviceMonitoring.Services
 
             using var command = _connection.CreateCommand();
             command.CommandText = @"
-                SELECT GUID, EmployeeID, FirstName, LastName, IsAdmin, IsActive 
+                SELECT GUID, EmployeeID, FirstName, LastName, Initials, IsAdmin, IsActive 
                 FROM EmployeeList 
                 ORDER BY FirstName, LastName";
 
@@ -382,12 +425,44 @@ namespace LonserviceMonitoring.Services
                     EmployeeID = reader.IsDBNull("EmployeeID") ? "" : reader["EmployeeID"].ToString() ?? "",
                     FirstName = reader.IsDBNull("FirstName") ? "" : reader.GetString("FirstName"),
                     LastName = reader.IsDBNull("LastName") ? "" : reader.GetString("LastName"),
+                    Initials = reader.IsDBNull("Initials") ? "" : reader.GetString("Initials"),
                     IsAdmin = reader.IsDBNull("IsAdmin") ? false : reader.GetBoolean("IsAdmin"),
                     IsActive = reader.IsDBNull("IsActive") ? false : reader.GetBoolean("IsActive")
                 });
             }
 
             return employees;
+        }
+
+        public async Task<EmployeeList?> ValidateEmployeeInitialsAsync(string initials)
+        {
+            if (_connection.State != ConnectionState.Open)
+                await _connection.OpenAsync();
+
+            using var command = _connection.CreateCommand();
+            command.CommandText = @"
+                SELECT GUID, EmployeeID, FirstName, LastName, Initials, IsAdmin, IsActive 
+                FROM EmployeeList 
+                WHERE Initials = @initials AND IsActive = 1";
+            
+            command.Parameters.Add(new SqlParameter("@initials", initials.ToUpper()));
+
+            using var reader = await command.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                return new EmployeeList
+                {
+                    GUID = reader.GetGuid("GUID"),
+                    EmployeeID = reader.IsDBNull("EmployeeID") ? "" : reader["EmployeeID"].ToString() ?? "",
+                    FirstName = reader.IsDBNull("FirstName") ? "" : reader.GetString("FirstName"),
+                    LastName = reader.IsDBNull("LastName") ? "" : reader.GetString("LastName"),
+                    Initials = reader.IsDBNull("Initials") ? "" : reader.GetString("Initials"),
+                    IsAdmin = reader.IsDBNull("IsAdmin") ? false : reader.GetBoolean("IsAdmin"),
+                    IsActive = reader.IsDBNull("IsActive") ? false : reader.GetBoolean("IsActive")
+                };
+            }
+
+            return null;
         }
 
         // All CRUD operations for CompanyDetails
@@ -427,6 +502,9 @@ namespace LonserviceMonitoring.Services
             if (_connection.State != ConnectionState.Open)
                 await _connection.OpenAsync();
 
+            // Extract just the Firmanr part from composite key
+            var firmanrOnly = ExtractFirmanr(companyName);
+
             using var command = _connection.CreateCommand();
             // command.CommandText = @"
             //     SELECT Company, Assignee, ProcessedStatus, TotalRecords, ContactedRecords, Created
@@ -445,7 +523,7 @@ namespace LonserviceMonitoring.Services
                 ORDER BY cd.Created DESC";
 
 
-            command.Parameters.Add(new SqlParameter("@companyName", companyName));
+            command.Parameters.Add(new SqlParameter("@companyName", firmanrOnly));
 
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -475,6 +553,9 @@ namespace LonserviceMonitoring.Services
                 bool recordExists = false;
                 CompanyDetails existing = null;
                 
+                // Extract just the Firmanr part from composite key
+                var firmanrOnly = ExtractFirmanr(company.Company);
+                
                 using (var checkCommand = _connection.CreateCommand())
                 {
                     checkCommand.CommandText = @"
@@ -482,7 +563,7 @@ namespace LonserviceMonitoring.Services
                         FROM CompanyDetails
                         WHERE Firmanr = @company
                         ORDER BY Created DESC";
-                    checkCommand.Parameters.Add(new SqlParameter("@company", company.Company));
+                    checkCommand.Parameters.Add(new SqlParameter("@company", firmanrOnly));
 
                     using var reader = await checkCommand.ExecuteReaderAsync();
                     if (await reader.ReadAsync())
@@ -501,6 +582,9 @@ namespace LonserviceMonitoring.Services
 
                 if (recordExists)
                 {
+                    // Track changes for audit log
+                    var changesList = new List<Dictionary<string, object>>();
+                    
                     // Update existing record
                     using var updateCommand = _connection.CreateCommand();
                     updateCommand.CommandText = @"
@@ -514,11 +598,53 @@ namespace LonserviceMonitoring.Services
                     var assigneeToUpdate = company.Assignee ?? existing?.Assignee;
                     var statusToUpdate = string.IsNullOrEmpty(company.ProcessedStatus) ? existing?.ProcessedStatus : company.ProcessedStatus;
 
-                    updateCommand.Parameters.Add(new SqlParameter("@company", company.Company));
+                    // Log assignee change
+                    if (company.Assignee != null && company.Assignee != existing?.Assignee)
+                    {
+                        changesList.Add(new Dictionary<string, object>
+                        {
+                            { "Field", "Assignee" },
+                            { "OldValue", existing?.Assignee?.ToString() ?? "Unassigned" },
+                            { "NewValue", company.Assignee.ToString() }
+                        });
+                    }
+
+                    // Log status change
+                    if (!string.IsNullOrEmpty(company.ProcessedStatus) && company.ProcessedStatus != existing?.ProcessedStatus)
+                    {
+                        changesList.Add(new Dictionary<string, object>
+                        {
+                            { "Field", "ProcessedStatus" },
+                            { "OldValue", existing?.ProcessedStatus ?? "Not Started" },
+                            { "NewValue", company.ProcessedStatus }
+                        });
+                    }
+
+                    updateCommand.Parameters.Add(new SqlParameter("@company", firmanrOnly));
                     updateCommand.Parameters.Add(new SqlParameter("@assignee", (object?)assigneeToUpdate ?? DBNull.Value));
                     updateCommand.Parameters.Add(new SqlParameter("@processedStatus", (object?)statusToUpdate ?? DBNull.Value));
 
                     rowsAffected = await updateCommand.ExecuteNonQueryAsync();
+
+                    // Log to audit if there are changes
+                    if (changesList.Count > 0)
+                    {
+                        var changesJson = JsonConvert.SerializeObject(changesList);
+                        using var auditCmd = _connection.CreateCommand();
+                        auditCmd.CommandText = @"
+                            INSERT INTO [dbo].[AuditLog] (Timestamp, Action, [User], RecordId, Changes, CompanyDetails, SourceFilename)
+                            VALUES (@timestamp, @action, @user, @recordId, @changes, @companyDetails, @sourceFilename)";
+                        
+                        auditCmd.Parameters.Add(new SqlParameter("@timestamp", DateTime.Now));
+                        auditCmd.Parameters.Add(new SqlParameter("@action", "UPDATE"));
+                        auditCmd.Parameters.Add(new SqlParameter("@user", "System")); // Could be passed as parameter
+                        auditCmd.Parameters.Add(new SqlParameter("@recordId", Guid.NewGuid().ToString()));
+                        auditCmd.Parameters.Add(new SqlParameter("@changes", changesJson));
+                        auditCmd.Parameters.Add(new SqlParameter("@companyDetails", company.Company));
+                        auditCmd.Parameters.Add(new SqlParameter("@sourceFilename", DBNull.Value));
+                        
+                        await auditCmd.ExecuteNonQueryAsync();
+                    }
                 }
                 else
                 {
@@ -528,7 +654,7 @@ namespace LonserviceMonitoring.Services
                         INSERT INTO CompanyDetails (Firmanr, Assignee, ProcessedStatus)
                         VALUES (@company, @assignee, @processedStatus)";
 
-                    insertCommand.Parameters.Add(new SqlParameter("@company", company.Company));
+                    insertCommand.Parameters.Add(new SqlParameter("@company", firmanrOnly));
                     insertCommand.Parameters.Add(new SqlParameter("@assignee", (object?)company.Assignee ?? DBNull.Value));
                     insertCommand.Parameters.Add(new SqlParameter("@processedStatus", (object?)company.ProcessedStatus ?? DBNull.Value));
 

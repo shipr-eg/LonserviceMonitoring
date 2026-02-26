@@ -70,6 +70,12 @@ const translations = {
     old_value: "Old Value",
     new_value: "New Value",
     modified_by: "Modified By",
+    source_file: "Source File",
+    company_details: "Company Details",
+    filter_by_date: "Filter by Date",
+    filter_by_source_file: "Filter by Source File",
+    filter_by_company: "Filter by Company",
+    filter_company: "Enter company name...",
     none: "None",
     // Notes column and input
     notes_column: "Notes",
@@ -469,7 +475,7 @@ async function loadDashboardConfiguration() {
       "processedstatus",
       "companyprocessedstatus"
     ];
-    essentialColumns = ["confirmed", "notes", "firmanr"];
+    essentialColumns = ["confirmed", "notes", "firmanr", "koncernnr_", "sourcefilename"];
     showError("Using default configuration due to configuration load error.");
   }
 }
@@ -537,44 +543,47 @@ function processAndDisplayData() {
   console.log("=== processAndDisplayData END ===");
 }
 
-// Group data by configurable column
+// Group data by configurable column(s)
 function groupDataByColumn(data, groupingConfig) {
   console.log("=== groupDataByColumn START ===");
   console.log("Input data length:", data.length);
   console.log("groupingConfig:", groupingConfig);
   
   const grouped = {};
-  const groupByColumn = groupingConfig.groupByColumn || 'firmanr';
+  
+  // Support both single column (legacy) and multiple columns (new)
+  const groupByColumns = groupingConfig.groupByColumns || 
+                        (groupingConfig.groupByColumn ? [groupingConfig.groupByColumn] : ['firmanr']);
+  
   const sortByColumn = groupingConfig.sortByColumn || 'createddate';
   const sortDirection = groupingConfig.sortDirection || 'asc';
 
-  console.log("Grouping by column:", groupByColumn);
+  console.log("Grouping by columns:", groupByColumns);
 
   data.forEach((record, index) => {
-    // Get the grouping value - check direct properties only
-    let groupValue = record[groupByColumn] || "Unknown";
+    // Create a composite key from all grouping columns
+    const compositeKey = groupByColumns.map(col => {
+      let value = getRecordValue(record, col) || "Unknown";
+      // Handle boolean values
+      if (typeof value === 'boolean') {
+        value = value ? 'Yes' : 'No';
+      }
+      return String(value);
+    }).join(' | ');
     
-    console.log(`Record ${index}: ${groupByColumn} = "${groupValue}", processedStatus = "${record.processedStatus}", companyprocessedstatus = "${record.companyprocessedstatus}", assigneeName = "${record.assigneeName}", CompanyAssigneeName = "${record.CompanyAssigneeName}"`);
+    console.log(`Record ${index}: composite key = "${compositeKey}", processedStatus = "${record.processedStatus}"`);
     
-    // Handle boolean values for grouping (like 'confirmed')
-    if (typeof groupValue === 'boolean') {
-      groupValue = groupValue ? 'Yes' : 'No';
+    if (!grouped[compositeKey]) {
+      grouped[compositeKey] = [];
     }
-    
-    // Ensure groupValue is a string
-    groupValue = String(groupValue);
-    
-    if (!grouped[groupValue]) {
-      grouped[groupValue] = [];
-    }
-    grouped[groupValue].push(record);
+    grouped[compositeKey].push(record);
   });
 
   // Sort each group by the specified column
   Object.keys(grouped).forEach((groupKey) => {
     grouped[groupKey].sort((a, b) => {
-      let aVal = a[sortByColumn] || "";
-      let bVal = b[sortByColumn] || "";
+      let aVal = getRecordValue(a, sortByColumn) || "";
+      let bVal = getRecordValue(b, sortByColumn) || "";
       
       // Handle date sorting
       if (sortByColumn.toLowerCase().includes('date')) {
@@ -686,8 +695,11 @@ function getColumnNames() {
     initializeColumnVisibility();
   }
 
-  // Filter to only visible columns
+  // Filter to only visible columns (but keep essential columns even if they're in hiddenColumns)
+  const essentialLower = essentialColumns.map(col => col.toLowerCase());
   const visibleColumns = allColumns.filter(col => {
+    const isEssential = essentialLower.includes(col.toLowerCase());
+    if (isEssential) return true; // Always include essential columns
     const isHidden = hiddenColumns.some(hidden => hidden.toLowerCase() === col.toLowerCase());
     return !isHidden;
   });
@@ -947,10 +959,16 @@ function createCompanyGroup(company, data, columns) {
 // Get column width
 function getColumnWidth(columnName) {
   switch (columnName.toLowerCase()) {
-    case "notes":
-      return "250px";
     case "confirmed":
+      return "60px";
+    case "notes":
+      return "200px";
+    case "firmanr":
+      return "80px";
+    case "sourcefilename":
       return "100px";
+    case "koncernnr_":
+      return "80px";
     case "company":
       return "150px";
     case "createddate":
@@ -1057,20 +1075,20 @@ function renderTableCell(record, columnName, company) {
 
 // Get record value
 function getRecordValue(record, columnName) {
-  // First check additionalProperties
-  if (record.additionalProperties && record.additionalProperties.hasOwnProperty(columnName)) {
-    return record.additionalProperties[columnName];
+  // Check with original casing first (top-level properties)
+  if (record.hasOwnProperty(columnName)) {
+    return record[columnName];
   }
 
-  // Fallback to checking main properties (case-insensitive)
+  // Check case-insensitive for top-level properties
   const lowerCol = columnName.toLowerCase();
   if (record.hasOwnProperty(lowerCol)) {
     return record[lowerCol];
   }
 
-  // Check with original casing
-  if (record.hasOwnProperty(columnName)) {
-    return record[columnName];
+  // Then check additionalProperties
+  if (record.additionalProperties && record.additionalProperties.hasOwnProperty(columnName)) {
+    return record.additionalProperties[columnName];
   }
 
   return "";
@@ -1424,12 +1442,17 @@ async function saveAllChanges(isAutoSave = false) {
     const changeCount = pendingChanges.size;
     const changes = Array.from(pendingChanges.values());
     
+    // Send changes - user is tracked via session on server side
+    const requestBody = {
+      changes: changes
+    };
+    
     const response = await fetch("/api/data/save", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ changes }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) throw new Error("Save failed");
@@ -1643,9 +1666,12 @@ function searchWithinGroup(company, searchTerm) {
 function applyGroupFilters(company, groupSearch = "") {
   console.log(`=== applyGroupFilters START for company: "${company}" ===`);
   
-  const originalData = allData.filter(
-    (r) => (r.firmanr || "Unknown") === company
-  );
+  const originalData = allData.filter((r) => {
+    const firmanr = getRecordValue(r, "Firmanr") || getRecordValue(r, "firmanr") || "Unknown";
+    const koncernnr = getRecordValue(r, "Koncernnr_") || getRecordValue(r, "koncernnr_") || "Unknown";
+    const compositeKey = `${firmanr} | ${koncernnr}`;
+    return compositeKey === company;
+  });
   console.log(`Original data for company "${company}":`, originalData.length, "records");
   
   let filteredData = [...originalData];
@@ -1672,9 +1698,11 @@ function applyGroupFilters(company, groupSearch = "") {
 
       if (col.toLowerCase() === "confirmed") {
         const boolValue = filterValue === "true";
-        filteredData = filteredData.filter(
-          (record) => record.confirmed === boolValue
-        );
+        filteredData = filteredData.filter((record) => {
+          const confirmedValue = getRecordValue(record, "Confirmed") || getRecordValue(record, "confirmed");
+          // Handle boolean, number (0/1), or string values
+          return confirmedValue === boolValue || confirmedValue === (boolValue ? 1 : 0) || confirmedValue === String(boolValue);
+        });
       } else {
         filteredData = filteredData.filter((record) => {
           const value = getRecordValue(record, col);
@@ -1720,9 +1748,12 @@ function applyGroupFilters(company, groupSearch = "") {
 }
 
 function getFilteredData(company) {
-  const originalData = allData.filter(
-    (r) => (r.firmanr || "Unknown") === company
-  );
+  const originalData = allData.filter((r) => {
+    const firmanr = getRecordValue(r, "Firmanr") || getRecordValue(r, "firmanr") || "Unknown";
+    const koncernnr = getRecordValue(r, "Koncernnr_") || getRecordValue(r, "koncernnr_") || "Unknown";
+    const compositeKey = `${firmanr} | ${koncernnr}`;
+    return compositeKey === company;
+  });
   let filteredData = [...originalData];
 
   // Apply all active filters
@@ -1734,9 +1765,11 @@ function getFilteredData(company) {
 
       if (col.toLowerCase() === "confirmed") {
         const boolValue = filterValue === "true";
-        filteredData = filteredData.filter(
-          (record) => record.confirmed === boolValue
-        );
+        filteredData = filteredData.filter((record) => {
+          const confirmedValue = getRecordValue(record, "Confirmed") || getRecordValue(record, "confirmed");
+          // Handle boolean, number (0/1), or string values
+          return confirmedValue === boolValue || confirmedValue === (boolValue ? 1 : 0) || confirmedValue === String(boolValue);
+        });
       } else {
         filteredData = filteredData.filter((record) => {
           const value = getRecordValue(record, col);
@@ -2997,6 +3030,9 @@ async function showCompanyHistory(firmanr) {
 }
 
 function displayCompanyHistoryModal(firmanr, history) {
+  // Get unique source filenames for filter dropdown
+  const uniqueSourceFiles = [...new Set(history.map(h => h.sourceFilename).filter(f => f))];
+  
   const modalHTML = `
     <div class="modal fade" id="companyHistoryModal" tabindex="-1" aria-labelledby="companyHistoryModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-xl-custom">
@@ -3010,8 +3046,27 @@ function displayCompanyHistoryModal(firmanr, history) {
           <div class="modal-body">
             ${history.length === 0 ? 
               `<div class="alert alert-info">${t('no_history_records')}</div>` :
-              `<div class="table-responsive">
-                <table class="table table-striped table-hover">
+              `<div class="mb-3">
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <label class="form-label small">${t('filter_by_date')}:</label>
+                    <input type="date" id="historyDateFilter" class="form-control form-control-sm" onchange="filterHistory()">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">${t('filter_by_source_file')}:</label>
+                    <select id="historySourceFileFilter" class="form-select form-select-sm" onchange="filterHistory()">
+                      <option value="">${t('all')}</option>
+                      ${uniqueSourceFiles.map(f => `<option value="${f}">${f}</option>`).join('')}
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">${t('filter_by_company')}:</label>
+                    <input type="text" id="historyCompanyFilter" class="form-control form-control-sm" placeholder="${t('filter_company')}" onkeyup="filterHistory()">
+                  </div>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-striped table-hover" id="historyTable">
                   <thead class="table-dark">
                     <tr>
                       <th>${t('date_time')}</th>
@@ -3020,11 +3075,13 @@ function displayCompanyHistoryModal(firmanr, history) {
                       <th>${t('old_value')}</th>
                       <th>${t('new_value')}</th>
                       <th>${t('modified_by')}</th>
+                      <th>${t('source_file')}</th>
+                      <th>${t('company_details')}</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody id="historyTableBody">
                     ${history.map(h => `
-                      <tr>
+                      <tr data-timestamp="${h.timestamp}" data-sourcefile="${h.sourceFilename || ''}" data-company="${h.companyDetails || ''}">
                         <td>${formatDate(h.timestamp)}</td>
                         <td>
                           <span class="badge ${getActionBadgeClass(h.action)}">
@@ -3035,6 +3092,8 @@ function displayCompanyHistoryModal(firmanr, history) {
                         <td>${h.oldValue || `<em class="text-muted">${t('none')}</em>`}</td>
                         <td>${h.newValue || `<em class="text-muted">${t('none')}</em>`}</td>
                         <td>${h.modifiedBy}</td>
+                        <td>${h.sourceFilename || `<em class="text-muted">${t('none')}</em>`}</td>
+                        <td>${h.companyDetails || `<em class="text-muted">${t('none')}</em>`}</td>
                       </tr>
                     `).join('')}
                   </tbody>
@@ -3071,4 +3130,43 @@ function getActionBadgeClass(action) {
     case 'DELETE': return 'bg-danger';
     default: return 'bg-secondary';
   }
+}
+
+// Filter history table based on date, source file, and company
+function filterHistory() {
+  const dateFilter = document.getElementById('historyDateFilter')?.value;
+  const sourceFileFilter = document.getElementById('historySourceFileFilter')?.value?.toLowerCase();
+  const companyFilter = document.getElementById('historyCompanyFilter')?.value?.toLowerCase();
+  
+  const rows = document.querySelectorAll('#historyTableBody tr');
+  
+  rows.forEach(row => {
+    let showRow = true;
+    
+    // Filter by date
+    if (dateFilter) {
+      const rowDate = new Date(row.dataset.timestamp).toISOString().split('T')[0];
+      if (rowDate !== dateFilter) {
+        showRow = false;
+      }
+    }
+    
+    // Filter by source file
+    if (sourceFileFilter && showRow) {
+      const rowSourceFile = (row.dataset.sourcefile || '').toLowerCase();
+      if (!rowSourceFile.includes(sourceFileFilter)) {
+        showRow = false;
+      }
+    }
+    
+    // Filter by company
+    if (companyFilter && showRow) {
+      const rowCompany = (row.dataset.company || '').toLowerCase();
+      if (!rowCompany.includes(companyFilter)) {
+        showRow = false;
+      }
+    }
+    
+    row.style.display = showRow ? '' : 'none';
+  });
 }

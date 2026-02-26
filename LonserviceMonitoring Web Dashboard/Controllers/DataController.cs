@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using LonserviceMonitoring.Models;
 using LonserviceMonitoring.Services;
+using Microsoft.Extensions.Logging;
 
 namespace LonserviceMonitoring.Controllers
 {
@@ -11,11 +12,13 @@ namespace LonserviceMonitoring.Controllers
     {
         private readonly DataService _dataService;
         private readonly DashboardConfiguration _dashboardConfig;
+        private readonly ILogger<DataController> _logger;
 
-        public DataController(DataService dataService, IOptions<DashboardConfiguration> dashboardConfig)
+        public DataController(DataService dataService, IOptions<DashboardConfiguration> dashboardConfig, ILogger<DataController> logger)
         {
             _dataService = dataService;
             _dashboardConfig = dashboardConfig.Value;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -38,21 +41,53 @@ namespace LonserviceMonitoring.Controllers
         {
             try
             {
-                var user = HttpContext.Session.GetString("AdminUser") ?? "Anonymous";
+                // Priority order for user identification:
+                // 1. Employee initials from session (primary method)
+                // 2. User from request body (fallback)
+                // 3. Windows authenticated user
+                // 4. Session admin user
+                // 5. Anonymous
+                var user = HttpContext.Session.GetString("EmployeeInitials");
+                
+                if (string.IsNullOrEmpty(user))
+                {
+                    user = request.User;
+                }
+                
+                if (string.IsNullOrEmpty(user))
+                {
+                    user = HttpContext.User?.Identity?.Name;
+                }
+                
+                if (string.IsNullOrEmpty(user))
+                {
+                    user = HttpContext.Session.GetString("AdminUser");
+                }
+                
+                if (string.IsNullOrEmpty(user))
+                {
+                    user = "Anonymous";
+                }
+                
+                _logger.LogInformation("Save request received with {RowCount} rows from user {User}", request.Changes.Count, user);
+                
                 var success = await _dataService.SaveChangesAsync(request.Changes, user);
                 
                 if (success)
                 {
+                    _logger.LogInformation("Successfully saved {RowCount} rows", request.Changes.Count);
                     return Ok(new { message = $"{request.Changes.Count} rows saved successfully!" });
                 }
                 else
                 {
-                    return StatusCode(500, new { message = "Failed to save changes" });
+                    _logger.LogWarning("Failed to save {RowCount} rows - returned false from DataService", request.Changes.Count);
+                    return StatusCode(500, new { message = "Failed to save changes. Check server logs for details." });
                 }
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error saving changes", error = ex.Message });
+                _logger.LogError(ex, "Exception occurred while saving changes: {ErrorMessage}", ex.Message);
+                return StatusCode(500, new { message = "Error saving changes", error = ex.Message, details = ex.InnerException?.Message });
             }
         }
 
@@ -179,6 +214,42 @@ namespace LonserviceMonitoring.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error creating company", error = ex.Message });
+            }
+        }
+
+        [HttpPost("validate-initials")]
+        public async Task<ActionResult> ValidateInitials([FromBody] EmployeeLoginRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Initials))
+                {
+                    return Ok(new { isValid = false, message = "Please enter your initials" });
+                }
+
+                var employee = await _dataService.ValidateEmployeeInitialsAsync(request.Initials);
+                
+                if (employee != null)
+                {
+                    // Store employee info in session
+                    HttpContext.Session.SetString("EmployeeInitials", employee.Initials);
+                    HttpContext.Session.SetString("EmployeeName", employee.FullName);
+                    HttpContext.Session.SetString("EmployeeID", employee.EmployeeID);
+                    
+                    _logger.LogInformation("User {Initials} ({Name}) logged in successfully", employee.Initials, employee.FullName);
+                    
+                    return Ok(new { isValid = true, employee = new { employee.Initials, employee.FullName } });
+                }
+                else
+                {
+                    _logger.LogWarning("Failed login attempt with initials: {Initials}", request.Initials);
+                    return Ok(new { isValid = false, message = "Invalid initials. Please check and try again." });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating initials: {ErrorMessage}", ex.Message);
+                return StatusCode(500, new { message = "Error validating initials", error = ex.Message });
             }
         }
     }
