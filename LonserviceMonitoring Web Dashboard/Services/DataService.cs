@@ -42,18 +42,63 @@ namespace LonserviceMonitoring.Services
             if (_connection.State != ConnectionState.Open)
                 await _connection.OpenAsync();
 
+            // Check if optional filter tables exist before reading filter settings.
+            // This keeps /api/data working in server environments that don't yet have these tables.
+            bool filterEnabled = false;
+            bool hasFilterTables = false;
+
+            using (var tableCheckCmd = _connection.CreateCommand())
+            {
+                tableCheckCmd.CommandText = @"
+                    SELECT CASE
+                        WHEN OBJECT_ID('dbo.DashboardSettings', 'U') IS NOT NULL
+                         AND OBJECT_ID('dbo.AllowedKoncernnr', 'U') IS NOT NULL
+                        THEN 1 ELSE 0 END";
+
+                var tablesExistVal = await tableCheckCmd.ExecuteScalarAsync();
+                hasFilterTables = Convert.ToInt32(tablesExistVal) == 1;
+            }
+
+            if (hasFilterTables)
+            {
+                using var settingCmd = _connection.CreateCommand();
+                settingCmd.CommandText = "SELECT SettingValue FROM [dbo].[DashboardSettings] WHERE SettingKey = 'KoncernnrFilterEnabled'";
+                var val = await settingCmd.ExecuteScalarAsync();
+                filterEnabled = string.Equals(val?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+            }
+            else
+            {
+                _logger.LogWarning("DashboardSettings/AllowedKoncernnr tables not found. Running without koncernnr filtering.");
+            }
+
             using var command = _connection.CreateCommand();
-            // Select all columns - we'll filter out system columns in code
-            // command.CommandText = "SELECT * FROM CsvData ORDER BY Firmanr, Id";
-            command.CommandText = @"SELECT 
-                c.*,
-                cd.ProcessedStatus,
-                (e.FirstName + ' ' + e.LastName) AS AssigneeName
-            FROM [dbo].[CsvData] AS c
-            LEFT JOIN [dbo].[CompanyDetails] AS cd 
-                ON c.Firmanr = cd.Firmanr
-            LEFT JOIN [dbo].[EmployeeList] AS e 
-                ON e.EmployeeID = cd.Assignee";
+            if (filterEnabled)
+            {
+                command.CommandText = @"SELECT 
+                    c.*,
+                    cd.ProcessedStatus,
+                    (e.FirstName + ' ' + e.LastName) AS AssigneeName
+                FROM [dbo].[CsvData] AS c
+                LEFT JOIN [dbo].[CompanyDetails] AS cd 
+                    ON c.Firmanr = cd.Firmanr
+                LEFT JOIN [dbo].[EmployeeList] AS e 
+                    ON e.EmployeeID = cd.Assignee
+                WHERE c.Koncernnr_ IN (
+                    SELECT KoncernnrValue FROM [dbo].[AllowedKoncernnr] WHERE IsActive = 1
+                )";
+            }
+            else
+            {
+                command.CommandText = @"SELECT 
+                    c.*,
+                    cd.ProcessedStatus,
+                    (e.FirstName + ' ' + e.LastName) AS AssigneeName
+                FROM [dbo].[CsvData] AS c
+                LEFT JOIN [dbo].[CompanyDetails] AS cd 
+                    ON c.Firmanr = cd.Firmanr
+                LEFT JOIN [dbo].[EmployeeList] AS e 
+                    ON e.EmployeeID = cd.Assignee";
+            }
             
             using var reader = await command.ExecuteReaderAsync();
             var columnNames = new List<string>();
@@ -240,23 +285,25 @@ namespace LonserviceMonitoring.Services
 
             using var command = _connection.CreateCommand();
 
-            if (string.IsNullOrEmpty(searchTerm))
-            {
-                command.CommandText = "SELECT TOP 1000 * FROM AuditLog ORDER BY Timestamp DESC";
-            }
-            else
-            {
-                command.CommandText = @"
-                    SELECT TOP 1000 * FROM AuditLog 
-                    WHERE Action LIKE @search OR [User] LIKE @search OR RecordId LIKE @search OR Changes LIKE @search
-                    ORDER BY Timestamp DESC";
-                command.Parameters.Add(new SqlParameter("@search", $"%{searchTerm}%"));
-            }
+            command.CommandText = "SELECT TOP 1000 * FROM AuditLog ORDER BY Timestamp DESC";
+            command.Parameters.Clear();
 
             using var reader = await command.ExecuteReaderAsync();
+
+            // Determine which optional columns exist in this schema
+            var existingCols = new HashSet<string>(
+                Enumerable.Range(0, reader.FieldCount).Select(reader.GetName),
+                StringComparer.OrdinalIgnoreCase);
+
+            // Safe reader: returns null if column missing or null value
+            string? SafeRead(string col) =>
+                existingCols.Contains(col) && !reader.IsDBNull(reader.GetOrdinal(col))
+                    ? reader.GetString(col)
+                    : null;
+
             while (await reader.ReadAsync())
             {
-                logs.Add(new AuditLogModel
+                var log = new AuditLogModel
                 {
                     Id = reader.GetInt32("Id"),
                     Timestamp = reader.GetDateTime("Timestamp"),
@@ -264,42 +311,74 @@ namespace LonserviceMonitoring.Services
                     User = reader.GetString("User"),
                     RecordId = reader.GetString("RecordId"),
                     Changes = reader.GetString("Changes"),
-                    Firmanr = reader.IsDBNull(reader.GetOrdinal("Firmanr")) ? null : reader.GetString("Firmanr")
-                });
+                    Firmanr = SafeRead("Firmanr"),
+                    CompanyDetails = SafeRead("CompanyDetails"),
+                    SourceFilename = SafeRead("SourceFilename")
+                };
+
+                // Apply search filter in memory so query works regardless of schema
+                if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    var term = searchTerm.ToLower();
+                    bool match = log.Action.Contains(term, StringComparison.OrdinalIgnoreCase)
+                              || log.User.Contains(term, StringComparison.OrdinalIgnoreCase)
+                              || log.RecordId.Contains(term, StringComparison.OrdinalIgnoreCase)
+                              || log.Changes.Contains(term, StringComparison.OrdinalIgnoreCase)
+                              || (log.CompanyDetails?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+                              || (log.Firmanr?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false);
+                    if (!match) continue;
+                }
+
+                logs.Add(log);
             }
 
             return logs;
         }
 
-        public async Task<List<CompanyHistoryModel>> GetCompanyHistoryAsync(string firmanr)
+        public async Task<List<CompanyHistoryModel>> GetCompanyHistoryAsync(string compositeKey)
         {
             var history = new List<CompanyHistoryModel>();
 
             if (_connection.State != ConnectionState.Open)
                 await _connection.OpenAsync();
 
-            // Use the full composite key for CompanyDetails lookup
+            // Extract just the Firmanr part (before " | ") for legacy Firmanr-only rows
+            var firmanrOnly = compositeKey.Contains(" | ")
+                ? compositeKey.Split(" | ")[0].Trim()
+                : compositeKey;
+
+            // Schema-agnostic: fetch all rows for this firmanr and filter in-memory
+            // This handles both new rows (CompanyDetails = "310 | 11") and old rows (Firmanr = "310", CompanyDetails = NULL)
             using var command = _connection.CreateCommand();
-            command.CommandText = @"
-                SELECT Timestamp, Action, [User], Changes, RecordId, CompanyDetails, SourceFilename
-                FROM AuditLog
-                WHERE CompanyDetails = @companyDetails
-                ORDER BY Timestamp DESC";
-            command.Parameters.Add(new SqlParameter("@companyDetails", firmanr));
+            command.CommandText = "SELECT TOP 2000 * FROM AuditLog ORDER BY Timestamp DESC";
+            command.Parameters.Clear();
 
             using var reader = await command.ExecuteReaderAsync();
+
+            // Detect which optional columns exist in this schema
+            var existingCols = new HashSet<string>(
+                Enumerable.Range(0, reader.FieldCount).Select(reader.GetName),
+                StringComparer.OrdinalIgnoreCase);
+
+            string? SafeCol(string col) =>
+                existingCols.Contains(col) && !reader.IsDBNull(reader.GetOrdinal(col))
+                    ? reader.GetString(col) : null;
+
             while (await reader.ReadAsync())
             {
-                var changes = reader.GetString("Changes");
-                var action = reader.GetString("Action");
+                var companyDetails = SafeCol("CompanyDetails");
+                var oldFirmanr = SafeCol("Firmanr");
+
+                // Match: new rows by CompanyDetails composite key, old rows by Firmanr only
+                bool isMatch = string.Equals(companyDetails, compositeKey, StringComparison.OrdinalIgnoreCase)
+                            || (companyDetails == null && string.Equals(oldFirmanr, firmanrOnly, StringComparison.OrdinalIgnoreCase));
+                if (!isMatch) continue;
+
+                var changes = SafeCol("Changes") ?? "[]";
+                var action = SafeCol("Action") ?? "";
                 var timestamp = reader.GetDateTime("Timestamp");
-                var user = reader.GetString("User");
-                var sourceFilename = reader.IsDBNull(reader.GetOrdinal("SourceFilename")) 
-                    ? null 
-                    : reader.GetString("SourceFilename");
-                var companyDetails = reader.IsDBNull(reader.GetOrdinal("CompanyDetails")) 
-                    ? null 
-                    : reader.GetString("CompanyDetails");
+                var user = SafeCol("User") ?? "";
+                var sourceFilename = SafeCol("SourceFilename");
 
                 // Parse the changes JSON to extract field-level changes
                 try
@@ -542,7 +621,11 @@ namespace LonserviceMonitoring.Services
             return companies;
         }
 
-        public async Task<int> InsertCompanyDetailsAsync(CompanyDetails company)
+        public async Task<int> InsertCompanyDetailsAsync(
+            CompanyDetails company,
+            string user = "System",
+            bool hasAssigneeUpdate = true,
+            bool hasProcessedStatusUpdate = true)
         {
             try
             {
@@ -594,29 +677,29 @@ namespace LonserviceMonitoring.Services
                             Created = GETDATE()
                         WHERE Firmanr = @company";
 
-                    // Use provided values or keep existing ones if new values are null/empty
-                    var assigneeToUpdate = company.Assignee ?? existing?.Assignee;
-                    var statusToUpdate = string.IsNullOrEmpty(company.ProcessedStatus) ? existing?.ProcessedStatus : company.ProcessedStatus;
+                    // Update only fields present in request; allow explicit clear when value is null/empty.
+                    var assigneeToUpdate = hasAssigneeUpdate ? company.Assignee : existing?.Assignee;
+                    var statusToUpdate = hasProcessedStatusUpdate ? company.ProcessedStatus : existing?.ProcessedStatus;
 
                     // Log assignee change
-                    if (company.Assignee != null && company.Assignee != existing?.Assignee)
+                    if (hasAssigneeUpdate && company.Assignee != existing?.Assignee)
                     {
                         changesList.Add(new Dictionary<string, object>
                         {
                             { "Field", "Assignee" },
                             { "OldValue", existing?.Assignee?.ToString() ?? "Unassigned" },
-                            { "NewValue", company.Assignee.ToString() }
+                            { "NewValue", company.Assignee?.ToString() ?? "Unassigned" }
                         });
                     }
 
                     // Log status change
-                    if (!string.IsNullOrEmpty(company.ProcessedStatus) && company.ProcessedStatus != existing?.ProcessedStatus)
+                    if (hasProcessedStatusUpdate && company.ProcessedStatus != existing?.ProcessedStatus)
                     {
                         changesList.Add(new Dictionary<string, object>
                         {
                             { "Field", "ProcessedStatus" },
                             { "OldValue", existing?.ProcessedStatus ?? "Not Started" },
-                            { "NewValue", company.ProcessedStatus }
+                            { "NewValue", company.ProcessedStatus ?? "Not Started" }
                         });
                     }
 
@@ -637,7 +720,7 @@ namespace LonserviceMonitoring.Services
                         
                         auditCmd.Parameters.Add(new SqlParameter("@timestamp", DateTime.Now));
                         auditCmd.Parameters.Add(new SqlParameter("@action", "UPDATE"));
-                        auditCmd.Parameters.Add(new SqlParameter("@user", "System")); // Could be passed as parameter
+                        auditCmd.Parameters.Add(new SqlParameter("@user", user));
                         auditCmd.Parameters.Add(new SqlParameter("@recordId", Guid.NewGuid().ToString()));
                         auditCmd.Parameters.Add(new SqlParameter("@changes", changesJson));
                         auditCmd.Parameters.Add(new SqlParameter("@companyDetails", company.Company));
@@ -781,12 +864,13 @@ namespace LonserviceMonitoring.Services
 
                 using var command = _connection.CreateCommand();
                 command.CommandText = @"
-                    INSERT INTO EmployeeList (EmployeeID, FirstName, LastName, IsAdmin, IsActive)
-                    VALUES (@employeeId, @firstName, @lastName, @isAdmin, @isActive)";
+                    INSERT INTO EmployeeList (EmployeeID, FirstName, LastName, Initials, IsAdmin, IsActive)
+                    VALUES (@employeeId, @firstName, @lastName, @initials, @isAdmin, @isActive)";
 
                 command.Parameters.Add(new SqlParameter("@employeeId", employee.EmployeeID));
                 command.Parameters.Add(new SqlParameter("@firstName", employee.FirstName));
                 command.Parameters.Add(new SqlParameter("@lastName", employee.LastName));
+                command.Parameters.Add(new SqlParameter("@initials", (object?)employee.Initials ?? DBNull.Value));
                 command.Parameters.Add(new SqlParameter("@isAdmin", employee.IsAdmin));
                 command.Parameters.Add(new SqlParameter("@isActive", employee.IsActive));
 
@@ -810,13 +894,14 @@ namespace LonserviceMonitoring.Services
                 using var command = _connection.CreateCommand();
                 command.CommandText = @"
                     UPDATE EmployeeList
-                    SET FirstName = @firstName, LastName = @lastName, 
-                        IsAdmin = @isAdmin, IsActive = @isActive
+                    SET FirstName = @firstName, LastName = @lastName,
+                        Initials = @initials, IsAdmin = @isAdmin, IsActive = @isActive
                     WHERE GUID = @guid";
 
                 command.Parameters.Add(new SqlParameter("@guid", employee.GUID));
                 command.Parameters.Add(new SqlParameter("@firstName", employee.FirstName));
                 command.Parameters.Add(new SqlParameter("@lastName", employee.LastName));
+                command.Parameters.Add(new SqlParameter("@initials", (object?)employee.Initials ?? DBNull.Value));
                 command.Parameters.Add(new SqlParameter("@isAdmin", employee.IsAdmin));
                 command.Parameters.Add(new SqlParameter("@isActive", employee.IsActive));
 
@@ -891,6 +976,136 @@ namespace LonserviceMonitoring.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"Error deleting employee: {ex.Message}");
+                return false;
+            }
+        }
+
+        // ── Allowed Koncernnr CRUD ───────────────────────────────────────────────
+
+        public async Task<List<AllowedKoncernnr>> GetAllowedKoncernnrAsync()
+        {
+            var list = new List<AllowedKoncernnr>();
+            if (_connection.State != ConnectionState.Open)
+                await _connection.OpenAsync();
+
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT Id, KoncernnrValue, Description, IsActive, AddedBy, AddedDate FROM [dbo].[AllowedKoncernnr] ORDER BY KoncernnrValue";
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                list.Add(new AllowedKoncernnr
+                {
+                    Id = reader.GetInt32("Id"),
+                    KoncernnrValue = reader.GetString("KoncernnrValue"),
+                    Description = reader.IsDBNull("Description") ? null : reader.GetString("Description"),
+                    IsActive = reader.GetBoolean("IsActive"),
+                    AddedBy = reader.GetString("AddedBy"),
+                    AddedDate = reader.GetDateTime("AddedDate")
+                });
+            }
+            return list;
+        }
+
+        public async Task<bool> AddAllowedKoncernnrAsync(AllowedKoncernnr item, string user)
+        {
+            try
+            {
+                if (_connection.State != ConnectionState.Open)
+                    await _connection.OpenAsync();
+
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"INSERT INTO [dbo].[AllowedKoncernnr] (KoncernnrValue, Description, IsActive, AddedBy, AddedDate)
+                                    VALUES (@val, @desc, @active, @by, GETDATE())";
+                cmd.Parameters.Add(new SqlParameter("@val", item.KoncernnrValue.Trim()));
+                cmd.Parameters.Add(new SqlParameter("@desc", (object?)item.Description ?? DBNull.Value));
+                cmd.Parameters.Add(new SqlParameter("@active", item.IsActive));
+                cmd.Parameters.Add(new SqlParameter("@by", user));
+                await cmd.ExecuteNonQueryAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding AllowedKoncernnr");
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateAllowedKoncernnrAsync(AllowedKoncernnr item, string user)
+        {
+            try
+            {
+                if (_connection.State != ConnectionState.Open)
+                    await _connection.OpenAsync();
+
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"UPDATE [dbo].[AllowedKoncernnr]
+                                    SET KoncernnrValue = @val, Description = @desc, IsActive = @active
+                                    WHERE Id = @id";
+                cmd.Parameters.Add(new SqlParameter("@val", item.KoncernnrValue.Trim()));
+                cmd.Parameters.Add(new SqlParameter("@desc", (object?)item.Description ?? DBNull.Value));
+                cmd.Parameters.Add(new SqlParameter("@active", item.IsActive));
+                cmd.Parameters.Add(new SqlParameter("@id", item.Id));
+                await cmd.ExecuteNonQueryAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating AllowedKoncernnr");
+                return false;
+            }
+        }
+
+        public async Task<bool> DeleteAllowedKoncernnrAsync(int id)
+        {
+            try
+            {
+                if (_connection.State != ConnectionState.Open)
+                    await _connection.OpenAsync();
+
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = "DELETE FROM [dbo].[AllowedKoncernnr] WHERE Id = @id";
+                cmd.Parameters.Add(new SqlParameter("@id", id));
+                await cmd.ExecuteNonQueryAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting AllowedKoncernnr");
+                return false;
+            }
+        }
+
+        public async Task<bool> GetKoncernnrFilterEnabledAsync()
+        {
+            if (_connection.State != ConnectionState.Open)
+                await _connection.OpenAsync();
+
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT SettingValue FROM [dbo].[DashboardSettings] WHERE SettingKey = 'KoncernnrFilterEnabled'";
+            var val = await cmd.ExecuteScalarAsync();
+            return string.Equals(val?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public async Task<bool> SetKoncernnrFilterEnabledAsync(bool enabled, string user)
+        {
+            try
+            {
+                if (_connection.State != ConnectionState.Open)
+                    await _connection.OpenAsync();
+
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"IF EXISTS (SELECT * FROM [dbo].[DashboardSettings] WHERE SettingKey='KoncernnrFilterEnabled')
+                                        UPDATE [dbo].[DashboardSettings] SET SettingValue=@val, UpdatedBy=@by, UpdatedDate=GETDATE() WHERE SettingKey='KoncernnrFilterEnabled'
+                                    ELSE
+                                        INSERT INTO [dbo].[DashboardSettings](SettingKey,SettingValue,UpdatedBy,UpdatedDate) VALUES('KoncernnrFilterEnabled',@val,@by,GETDATE())";
+                cmd.Parameters.Add(new SqlParameter("@val", enabled ? "true" : "false"));
+                cmd.Parameters.Add(new SqlParameter("@by", user));
+                await cmd.ExecuteNonQueryAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating KoncernnrFilterEnabled setting");
                 return false;
             }
         }

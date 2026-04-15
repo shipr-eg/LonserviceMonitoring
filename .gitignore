@@ -436,3 +436,4 @@ $RECYCLE.BIN/
 
 # Mac crap
 .DS_Store
+*.7z

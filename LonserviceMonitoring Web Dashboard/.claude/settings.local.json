@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Get-Process dotnet -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; ''Kill attempted''\")",
+      "Bash(powershell -NoProfile -Command \"Get-Process dotnet -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; exit 0\")",
+      "Read(//c/Users/shipr/.claude/projects/c--Users-shipr-Documents-GitHub-LonserviceMonitoring-LonserviceMonitoring-LonserviceMonitoring-Web-Dashboard/memory/**)",
+      "Bash(git -C \"c:/Users/shipr/Documents/GitHub/LonserviceMonitoring/LonserviceMonitoring\" log --oneline -3)",
+      "Bash(git -C \"c:\\\\Users\\\\shipr\\\\Documents\\\\GitHub\\\\LonserviceMonitoring\\\\LonserviceMonitoring\" log --oneline -3)",
+      "Bash(cmd /c \"cd /d C:\\\\Users\\\\shipr\\\\Documents\\\\GitHub\\\\LonserviceMonitoring\\\\LonserviceMonitoring && git log --oneline -3\")",
+      "Bash(cmd /c \"git -C C:\\\\Users\\\\shipr\\\\Documents\\\\GitHub\\\\LonserviceMonitoring\\\\LonserviceMonitoring log --oneline -3 2>&1\")",
+      "Bash(dotnet publish \"c:\\\\Users\\\\shipr\\\\Documents\\\\GitHub\\\\LonserviceMonitoring\\\\LonserviceMonitoring\\\\LonserviceMonitoring Web Dashboard\\\\LonserviceMonitoring.csproj\" -c Release -o \"c:\\\\Users\\\\shipr\\\\Documents\\\\GitHub\\\\LonserviceMonitoring\\\\LonserviceMonitoring\\\\publish\")",
+      "Bash(cmd /c \"dotnet publish \"\"c:\\\\Users\\\\shipr\\\\Documents\\\\GitHub\\\\LonserviceMonitoring\\\\LonserviceMonitoring\\\\LonserviceMonitoring Web Dashboard\\\\LonserviceMonitoring.csproj\"\" -c Release -o \"\"c:\\\\Users\\\\shipr\\\\Documents\\\\GitHub\\\\LonserviceMonitoring\\\\LonserviceMonitoring\\\\publish\"\" 2>&1\")",
+      "Bash(cmd /c \"dotnet publish \"\"c:\\\\Users\\\\shipr\\\\Documents\\\\GitHub\\\\LonserviceMonitoring\\\\LonserviceMonitoring\\\\LonserviceMonitoring Web Dashboard\\\\LonserviceMonitoring.csproj\"\" -c Release -o \"\"c:\\\\Users\\\\shipr\\\\Documents\\\\GitHub\\\\LonserviceMonitoring\\\\LonserviceMonitoring\\\\publish\"\"\")"
+    ]
+  }
+}

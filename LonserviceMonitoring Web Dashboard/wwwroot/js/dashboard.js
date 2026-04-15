@@ -397,6 +397,12 @@ let essentialColumns = [];
 let dashboardConfig = null;
 const statusOptions = ["Not Started", "In Progress", "Waiting", "Processed"];
 
+// Per-group column visibility map (keyed by internal group key)
+let groupColumns = {};
+
+// Columns promoted to sub-headers — excluded from table column rendering
+const subHeaderColumns = ['sourcefilename'];
+
 // Helper function to get translated status label
 function getTranslatedStatus(status) {
   const statusMap = {
@@ -475,7 +481,7 @@ async function loadDashboardConfiguration() {
       "processedstatus",
       "companyprocessedstatus"
     ];
-    essentialColumns = ["confirmed", "notes", "firmanr", "koncernnr_", "sourcefilename"];
+    essentialColumns = ["confirmed", "notes", "koncernnr_", "firmanr", "sourcefilename"];
     showError("Using default configuration due to configuration load error.");
   }
 }
@@ -641,24 +647,30 @@ function renderGroupedData() {
   }
 
   console.log("Rendering groups...");
-  // Get all column names dynamically
-  const columns = getColumnNames();
-  console.log("Columns to display:", columns);
-  
+  // Get master column list (global, ordered, hidden-columns-filtered)
+  const masterColumns = getColumnNames();
+  console.log("Master columns:", masterColumns);
+
+  // Reset per-group column map on every full render
+  groupColumns = {};
+
   Object.keys(groupedData)
     .sort()
     .forEach((company) => {
       const groupData = groupedData[company];
       const processedStatus = groupData[0]?.companyprocessedstatus || groupData[0]?.processedStatus || "Not Started";
-      
+
       // Skip processed companies if the toggle is off
       if (!showProcessedCompanies && processedStatus === "Processed") {
         console.log(`Skipping processed group "${company}"`);
         return;
       }
-      
-      console.log(`Rendering group "${company}" with ${groupData.length} records`);
-      const groupElement = createCompanyGroup(company, groupData, columns);
+
+      // Compute and store per-group visible columns (Change 2)
+      const cols = getColumnsForGroup(groupData, masterColumns);
+      groupColumns[company] = cols;
+      console.log(`Rendering group "${company}" with ${groupData.length} records, ${cols.length} columns`);
+      const groupElement = createCompanyGroup(company, groupData, cols);
       container.appendChild(groupElement);
 
       // Only apply group filters if we're not showing search results
@@ -746,6 +758,82 @@ function getColumnNames() {
 
   return finalOrder;
 }
+
+// Reverse the composite group key for display only: "Firmanr | Koncernnr_" → "Koncernnr_ | Firmanr"
+function formatGroupKeyForDisplay(groupKey) {
+  if (!groupKey || !groupKey.includes(' | ')) return groupKey;
+  const parts = groupKey.split(' | ');
+  return parts.length === 2 ? `${parts[1]} | ${parts[0]}` : groupKey;
+}
+
+// Compute the visible column list for a specific group.
+// Essential columns are always shown. subHeaderColumns are always excluded.
+// All other columns: shown only if at least one row in the group has a non-empty value.
+function getColumnsForGroup(groupData, masterColumns) {
+  const essentialLower = essentialColumns.map(c => c.toLowerCase());
+  const subHeaderLower = subHeaderColumns.map(c => c.toLowerCase());
+  return masterColumns.filter(col => {
+    const colLower = col.toLowerCase();
+    if (subHeaderLower.includes(colLower)) return false;
+    if (essentialLower.includes(colLower)) return true;
+    return groupData.some(record => {
+      const val = getRecordValue(record, col);
+      return val !== null && val !== undefined && val !== '';
+    });
+  });
+}
+
+// Render table rows grouped by source file name, with a plain sub-header row between groups
+function renderTableRowsWithSourceGroups(data, columns, company) {
+  const bySourceFile = {};
+  data.forEach(record => {
+    const sf = getRecordValue(record, 'sourcefilename') || getRecordValue(record, 'SourceFileName') || '(Unknown)';
+    if (!bySourceFile[sf]) bySourceFile[sf] = [];
+    bySourceFile[sf].push(record);
+  });
+
+  let html = '';
+  Object.keys(bySourceFile).sort().forEach(sf => {
+    html += `
+      <tr class="source-file-subheader">
+        <td colspan="${columns.length}" style="background:#f8f9fa;color:#374151;font-weight:600;font-size:0.8rem;padding:8px 10px 4px;border-top:1px solid #e9ecef;border-bottom:none;position:relative;left:0;z-index:1;box-shadow:none;letter-spacing:0.2px;">
+          <i class="fas fa-file-csv me-1" style="color:#9ca3af;filter:grayscale(100%)"></i>${sf}
+        </td>
+      </tr>`;
+    bySourceFile[sf].forEach(record => {
+      html += `<tr data-record-id="${record.id}">
+        ${columns.map(col => renderTableCell(record, col, company)).join('')}
+      </tr>`;
+    });
+  });
+  return html;
+}
+
+// Group records by source file, preserving encounter order
+function groupBySourceFile(data) {
+  const groupMap = new Map();
+  data.forEach(record => {
+    const sf = getRecordValue(record, 'sourcefilename') || getRecordValue(record, 'SourceFileName') || '(Unknown)';
+    if (!groupMap.has(sf)) groupMap.set(sf, []);
+    groupMap.get(sf).push(record);
+  });
+  return Array.from(groupMap.entries()).map(([key, records]) => ({ key, records }));
+}
+
+// Return records for a given page of source-file groups
+function getRecordsForGroupPage(data, page, groupsPerPage) {
+  const groups = groupBySourceFile(data);
+  const start = (page - 1) * groupsPerPage;
+  return groups.slice(start, start + groupsPerPage).flatMap(g => g.records);
+}
+
+// Count distinct source file groups in a data set
+function getSourceFileGroupCount(data) {
+  const keys = new Set();
+  data.forEach(r => keys.add(getRecordValue(r, 'sourcefilename') || getRecordValue(r, 'SourceFileName') || '(Unknown)'));
+  return keys.size;
+}
+
 // Create Company filter
 function createCompanyFilter() {
   const filterContainer = document.getElementById("dataFilter");
@@ -817,20 +905,20 @@ function createCompanyGroup(company, data, columns) {
                 <div>
                     <div class="d-flex gap-3 align-items-center">
                         <div style="min-width: 240px;">
-                          <strong style="font-size: 1.1rem;">${company}</strong>
+                          <strong style="font-size: 1.1rem;">${formatGroupKeyForDisplay(company)}</strong>
                         </div>
                         <span>
-                          <span class="badge bg-info text-dark">
+                          <span class="badge group-badge-total">
                               ${t('total_count')}: <span id="total-rows-${company}">${totalRows}</span>
                           </span>
                         </span>
                         <span>
-                          <span class="badge bg-success">
+                          <span class="badge group-badge-processed">
                               ${t('processed_count')}: <span id="processed-rows-${company}">${totalRowsProcessed}</span>
                           </span>
                         </span>
                         <label>${t('assignee')}:</label>
-                        <select id="employee-select-${companyId}" class="form-select form-select-sm bg-secondary text-white" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', this.value, null)">
+                        <select id="employee-select-${companyId}" class="form-select form-select-sm group-header-select" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', this.value, null)">
                             <option value="">${t('select_employee')}</option>
                             ${employeesLists
                               .map(
@@ -842,20 +930,20 @@ function createCompanyGroup(company, data, columns) {
                               .join("")}
                         </select>
                         <label>${t('status')}:</label>
-                        <select id="status-select-${companyId}" class="form-select form-select-sm bg-secondary text-white" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', null, this.value)" >
-                        
-                        <option value="">${t('select_status')}</option>    
+                        <select id="status-select-${companyId}" class="form-select form-select-sm group-header-select" style="width: auto; max-width: 200px;" onclick="event.stopPropagation();" onchange="handleEmployeeSelection('${company}', null, this.value)" >
+
+                        <option value="">${t('select_status')}</option>
                         ${statusOptions
                           .map(
-                            (status) => ` 
+                            (status) => `
                                 <option value="${status}" ${
                               processedStatus === status ? "selected" : ""
                             }>${getTranslatedStatus(status)}</option>
                             `
                           )
-                          .join("")}  
+                          .join("")}
                         </select>
-                        <button class="btn btn-sm btn-outline-info ms-2" onclick="showCompanyHistory('${company}'); event.stopPropagation();" title="${t('view_company_history')}">
+                        <button class="btn btn-sm group-history-btn ms-2" onclick="showCompanyHistory('${company}'); event.stopPropagation();" title="${t('view_company_history')}">
                             <i class="fas fa-history"></i> ${t('history')}
                         </button>
                     </div>
@@ -910,41 +998,40 @@ function createCompanyGroup(company, data, columns) {
                             </tr>
                         </thead>
                         <tbody id="table-body-${company}">
-                            ${renderTableRows(
-                              data.slice(0, recordsPerPage),
+                            ${renderTableRowsWithSourceGroups(
+                              getRecordsForGroupPage(data, 1, recordsPerPage),
                               columns,
                               company
                             )}
                         </tbody>
                     </table>
                 </div>
-                
-                <div class="pagination-container d-flex justify-content-between align-items-center mt-3 p-3 bg-light rounded">
+
+                <div class="pagination-container d-flex justify-content-between align-items-center mt-3 p-3 rounded">
                     <div class="d-flex align-items-center gap-3">
-                        <span class="text-muted">
-                            Showing <span id="showing-${company}" class="fw-bold text-primary">1-${Math.min(
-    recordsPerPage,
-    data.length
-  )}</span> 
-                            of <span id="filtered-count-${company}" class="fw-bold">${
+                        <span class="pg-label">
+                            Showing <span id="showing-${company}" class="pg-count-highlight">${
+    getRecordsForGroupPage(data, 1, recordsPerPage).length
+  }</span>
+                            of <span id="filtered-count-${company}" class="pg-count-highlight">${
     data.length
   }</span> records
                         </span>
                         <div class="d-flex align-items-center gap-2">
-                            <label for="pageSize-${company}" class="form-label mb-0 text-muted">Show:</label>
-                            <select id="pageSize-${company}" class="form-select form-select-sm" style="width: auto;" onchange="changePageSize('${company}', this.value)">
+                            <label for="pageSize-${company}" class="pg-label mb-0">Groups Per Page:</label>
+                            <select id="pageSize-${company}" class="pg-page-size-select" onchange="changePageSize('${company}', this.value)">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
                                 <option value="5">5</option>
                                 <option value="10" selected>10</option>
                                 <option value="25">25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
                             </select>
                         </div>
                     </div>
                     <div>
                         <nav>
                             <ul class="pagination pagination-sm mb-0" id="pagination-${company}">
-                                ${createPagination(company, data.length, 1)}
+                                ${createPagination(company, getSourceFileGroupCount(data), 1)}
                             </ul>
                         </nav>
                     </div>
@@ -1203,25 +1290,24 @@ function createPagination(company, totalRecords, currentPage) {
 function changePage(company, page) {
   const data = getFilteredData(company);
   const pageSize = getPageSize(company);
-  const totalPages = Math.ceil(data.length / pageSize);
+  const totalGroupCount = getSourceFileGroupCount(data);
+  const totalPages = Math.ceil(totalGroupCount / pageSize);
 
   if (page < 1 || page > totalPages) return;
 
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const pageData = data.slice(startIndex, endIndex);
+  const pageData = getRecordsForGroupPage(data, page, pageSize);
 
-  const columns = getColumnNames();
+  const columns = groupColumns[company] || getColumnNames();
   const tableBody = document.getElementById(`table-body-${company}`);
-  tableBody.innerHTML = renderTableRows(pageData, columns, company);
+  tableBody.innerHTML = renderTableRowsWithSourceGroups(pageData, columns, company);
 
   // Update pagination
   const pagination = document.getElementById(`pagination-${company}`);
-  pagination.innerHTML = createPagination(company, data.length, page);
+  pagination.innerHTML = createPagination(company, totalGroupCount, page);
 
-  // Update showing count
+  // Update showing count (record count of this page vs total records)
   const showing = document.getElementById(`showing-${company}`);
-  showing.textContent = `${startIndex + 1}-${Math.min(endIndex, data.length)}`;
+  showing.textContent = pageData.length;
 
   // Store current page for this company
   if (!window.companyPagination) window.companyPagination = {};
@@ -1239,20 +1325,20 @@ function changePageSize(company, newSize) {
   // Reset to page 1 when changing page size
   const data = getFilteredData(company);
   const pageSize = parseInt(newSize);
-  const columns = getColumnNames();
+  const columns = groupColumns[company] || getColumnNames();
 
-  // Update table content
-  const pageData = data.slice(0, pageSize);
+  // Update table content — page 1 of source file groups
+  const pageData = getRecordsForGroupPage(data, 1, pageSize);
   const tableBody = document.getElementById(`table-body-${company}`);
-  tableBody.innerHTML = renderTableRows(pageData, columns, company);
+  tableBody.innerHTML = renderTableRowsWithSourceGroups(pageData, columns, company);
 
-  // Update pagination
+  // Update pagination (based on group count)
   const pagination = document.getElementById(`pagination-${company}`);
-  pagination.innerHTML = createPagination(company, data.length, 1);
+  pagination.innerHTML = createPagination(company, getSourceFileGroupCount(data), 1);
 
   // Update showing count
   const showing = document.getElementById(`showing-${company}`);
-  showing.textContent = `1-${Math.min(pageSize, data.length)}`;
+  showing.textContent = pageData.length;
 
   // Reset current page for this company
   if (!window.companyPagination) window.companyPagination = {};
@@ -1690,7 +1776,7 @@ function applyGroupFilters(company, groupSearch = "") {
   }
 
   // Apply column filters
-  const columns = getColumnNames();
+  const columns = groupColumns[company] || getColumnNames();
   columns.forEach((col) => {
     const filterInput = document.getElementById(`filter-${company}-${col}`);
     if (filterInput && filterInput.value) {
@@ -1712,23 +1798,19 @@ function applyGroupFilters(company, groupSearch = "") {
     }
   });
 
-  // Update display
+  // Update display — page 1 of source file groups
   const pageSize = getPageSize(company);
+  const pageData = getRecordsForGroupPage(filteredData, 1, pageSize);
   const tableBody = document.getElementById(`table-body-${company}`);
-  const columns_list = getColumnNames();
 
   if (tableBody) {
-    tableBody.innerHTML = renderTableRows(
-      filteredData.slice(0, pageSize),
-      columns_list,
-      company
-    );
+    tableBody.innerHTML = renderTableRowsWithSourceGroups(pageData, columns, company);
   }
 
-  // Update pagination
+  // Update pagination (based on group count)
   const pagination = document.getElementById(`pagination-${company}`);
   if (pagination) {
-    pagination.innerHTML = createPagination(company, filteredData.length, 1);
+    pagination.innerHTML = createPagination(company, getSourceFileGroupCount(filteredData), 1);
   }
 
   // Update counts
@@ -1739,7 +1821,7 @@ function applyGroupFilters(company, groupSearch = "") {
     filteredCount.textContent = filteredData.length;
   }
   if (showing) {
-    showing.textContent = `1-${Math.min(pageSize, filteredData.length)}`;
+    showing.textContent = pageData.length;
   }
 
   // Reset current page for this company
@@ -1757,7 +1839,7 @@ function getFilteredData(company) {
   let filteredData = [...originalData];
 
   // Apply all active filters
-  const columns = getColumnNames();
+  const columns = groupColumns[company] || getColumnNames();
   columns.forEach((col) => {
     const filterInput = document.getElementById(`filter-${company}-${col}`);
     if (filterInput && filterInput.value) {
@@ -1919,10 +2001,38 @@ function handleEmployeeSelection(
   assignee = null,
   processedStatus = null
 ) {
-  if (company) {
-    const companyObj = { Company: company, Assignee: assignee, ProcessedStatus: processedStatus };
-    addNewCompanyDetails(companyObj);
+  if (!company) return;
+
+  const companyTrimmed = String(company).trim();
+  const assigneeChanged = assignee !== null && assignee !== undefined;
+  const statusChanged = processedStatus !== null && processedStatus !== undefined;
+
+  // API expects Assignee as nullable int, not empty string.
+  let normalizedAssignee = assignee;
+  if (normalizedAssignee === "" || normalizedAssignee === undefined) {
+    normalizedAssignee = null;
   }
+
+  const normalizedStatus =
+    processedStatus === "" || processedStatus === undefined
+      ? null
+      : processedStatus;
+
+  const companyObj = {
+    Company: companyTrimmed
+  };
+
+  // Include only fields changed by the triggering dropdown.
+  if (assigneeChanged) {
+    companyObj.Assignee = normalizedAssignee;
+  }
+  if (statusChanged) {
+    companyObj.ProcessedStatus = normalizedStatus;
+  }
+
+  if (!assigneeChanged && !statusChanged) return;
+
+  addNewCompanyDetails(companyObj);
 }
 // Add new company details
 function addNewCompanyDetails(companyObj) {
@@ -1933,7 +2043,12 @@ function addNewCompanyDetails(companyObj) {
   })
     .then((response) => {
       if (!response.ok) {
-        throw new Error("Network response was not ok");
+        return response.text().then((bodyText) => {
+          const error = new Error("Network response was not ok");
+          error.status = response.status;
+          error.bodyText = bodyText;
+          throw error;
+        });
       }
       return response.json();
     })
@@ -1955,18 +2070,53 @@ function addNewCompanyDetails(companyObj) {
     })
     .catch((error) => {
       console.error("Error adding company assignee:", error);
-      showError("Error adding company assignee", "error");
+      let message = "Error adding company assignee";
+      if (error?.status === 400 && error?.bodyText) {
+        try {
+          const parsed = JSON.parse(error.bodyText);
+          if (parsed?.errors?.["$.Assignee"]?.[0]) {
+            message = parsed.errors["$.Assignee"][0];
+          } else if (parsed?.message) {
+            message = parsed.message;
+          }
+        } catch {
+          // Keep generic message if response is not JSON.
+        }
+      }
+      showError(message, "error");
     });
 }
 
 // Update All Data based on the new company update
 function updateAllDataBasedOnCompanyUpdate(companyObj) {
+  const hasStatusUpdate = Object.prototype.hasOwnProperty.call(companyObj, "ProcessedStatus");
+  const hasAssigneeUpdate = Object.prototype.hasOwnProperty.call(companyObj, "Assignee");
+
+  // Company key can be either "firmanr" or "firmanr | koncernnr_"
+  const companyKey = (companyObj.Company || '').trim();
+  const hasCompositeKey = companyKey.includes(' | ');
+  const keyParts = hasCompositeKey ? companyKey.split(' | ') : [companyKey];
+  const firmanrKey = (keyParts[0] || '').trim();
+  const koncernnrKey = (keyParts[1] || '').trim();
+
   allData
-    .filter((record) => record.firmanr === companyObj.Company)
+    .filter((record) => {
+      const recordFirmanr = (record.firmanr || '').trim();
+      const recordKoncernnr = (record.koncernnr_ || '').trim();
+
+      if (hasCompositeKey) {
+        return recordFirmanr === firmanrKey && recordKoncernnr === koncernnrKey;
+      }
+
+      // Legacy path: caller passed only firmanr
+      return recordFirmanr === firmanrKey;
+    })
     .forEach((record) => {
-      if (companyObj.ProcessedStatus) {
+      if (hasStatusUpdate) {
         record.companyprocessedstatus = companyObj.ProcessedStatus;
-      } else if (companyObj.Assignee) {
+        record.processedStatus = companyObj.ProcessedStatus;
+      }
+      if (hasAssigneeUpdate) {
         const assignee = employeesLists.find(
           (emp) => emp.employeeID === companyObj.Assignee
         );
@@ -1976,7 +2126,7 @@ function updateAllDataBasedOnCompanyUpdate(companyObj) {
     });
     
   // Update the group's data-has-assignee attribute if assignee changed
-  if (companyObj.Assignee) {
+  if (hasAssigneeUpdate) {
     const groupId = `group-${companyObj.Company.replace(/\s+/g, "-")}`;
     const groupElement = document.getElementById(groupId);
     if (groupElement) {
@@ -1990,9 +2140,28 @@ function updateAllDataBasedOnCompanyUpdate(companyObj) {
   }
   
   // If status changed to Processed, hide the company if toggle is off
-  if (companyObj.ProcessedStatus === "Processed" && !showProcessedCompanies) {
+  if (hasStatusUpdate && companyObj.ProcessedStatus === "Processed" && !showProcessedCompanies) {
     renderGroupedData();
   }
+}
+
+// Open Admin Panel directly to Audit Logs tab (toolbar history button)
+function openAuditLogsTab() {
+  const modal = new bootstrap.Modal(document.getElementById("adminModal"));
+  modal.show();
+  isAdmin = true;
+  document.getElementById("adminLogin").style.display = "none";
+  document.getElementById("adminPanel").style.display = "block";
+
+  // Switch to audit logs tab
+  const auditTabEl = document.getElementById("audit-logs-tab");
+  if (auditTabEl) {
+    bootstrap.Tab.getOrCreateInstance(auditTabEl).show();
+  }
+  loadAuditLogs();
+  loadCsvHistory();
+  loadEmployees();
+  loadAllowedKoncernnr();
 }
 
 // Admin functions
@@ -2008,6 +2177,7 @@ function toggleAdminView() {
   loadAuditLogs();
   loadCsvHistory();
   loadEmployees();
+  loadAllowedKoncernnr();
 }
 
 async function adminLogin(event) {
@@ -2053,6 +2223,8 @@ async function adminLogout() {
   }
 }
 
+let allAuditLogs = [];
+
 async function loadAuditLogs() {
   if (!isAdmin) return;
 
@@ -2060,65 +2232,50 @@ async function loadAuditLogs() {
     const response = await fetch("/api/admin/audit-logs");
     if (!response.ok) return;
 
-    const logs = await response.json();
-    const tableBody = document.getElementById("auditLogsTable");
-
-    tableBody.innerHTML = logs
-      .map(
-        (log) => `
-            <tr>
-                <td>${formatDate(log.timestamp)}</td>
-                <td><span class="badge bg-info">${log.action}</span></td>
-                <td>${log.user}</td>
-                <td><code>${log.recordId}</code></td>
-                <td class="text-truncate" style="max-width: 200px;" title="${
-                  log.changes
-                }">
-                    ${log.changes}
-                </td>
-            </tr>
-        `
-      )
-      .join("");
+    allAuditLogs = await response.json();
+    renderAuditLogRows(allAuditLogs);
   } catch (error) {
     console.error("Error loading audit logs:", error);
   }
 }
 
-async function searchAuditLogs() {
-  if (!isAdmin) return;
+function renderAuditLogRow(log) {
+  const displayCompany = log.companyDetails ? formatGroupKeyForDisplay(log.companyDetails) : (log.firmanr || '<em class="text-muted">—</em>');
+  return `
+    <tr>
+        <td>${formatDate(log.timestamp)}</td>
+        <td><span class="badge bg-info">${log.action}</span></td>
+        <td>${log.user}</td>
+        <td>${displayCompany}</td>
+        <td class="text-truncate" style="max-width: 200px;" title="${log.changes}">${log.changes}</td>
+    </tr>
+  `;
+}
 
-  const searchTerm = document.getElementById("auditSearch").value;
+function renderAuditLogRows(logs) {
+  const tableBody = document.getElementById("auditLogsTable");
+  if (tableBody) tableBody.innerHTML = logs.map(log => renderAuditLogRow(log)).join("");
+}
 
-  try {
-    const response = await fetch(
-      `/api/admin/audit-logs?searchTerm=${encodeURIComponent(searchTerm)}`
-    );
-    if (!response.ok) return;
-
-    const logs = await response.json();
-    const tableBody = document.getElementById("auditLogsTable");
-
-    tableBody.innerHTML = logs
-      .map(
-        (log) => `
-            <tr>
-                <td>${formatDate(log.timestamp)}</td>
-                <td><span class="badge bg-info">${log.action}</span></td>
-                <td>${log.user}</td>
-                <td><code>${log.recordId}</code></td>
-                <td class="text-truncate" style="max-width: 200px;" title="${
-                  log.changes
-                }">
-                    ${log.changes}
-                </td>
-            </tr>
-        `
-      )
-      .join("");
-  } catch (error) {
-    console.error("Error searching audit logs:", error);
+function filterAuditLogs() {
+  const term = (document.getElementById("auditSearch").value || "").toLowerCase().trim();
+  if (!term) {
+    renderAuditLogRows(allAuditLogs);
+    return;
   }
+  const filtered = allAuditLogs.filter(log => {
+    // Check both the stored key ("310 | 11") and the display key ("11 | 310")
+    const storedCompany = (log.companyDetails || log.firmanr || "").toLowerCase();
+    const displayCompany = log.companyDetails
+      ? formatGroupKeyForDisplay(log.companyDetails).toLowerCase()
+      : storedCompany;
+    return (log.action || "").toLowerCase().includes(term)
+        || (log.user || "").toLowerCase().includes(term)
+        || storedCompany.includes(term)
+        || displayCompany.includes(term)
+        || (log.changes || "").toLowerCase().includes(term);
+  });
+  renderAuditLogRows(filtered);
 }
 
 // CSV Processing History functions
@@ -2234,7 +2391,10 @@ function getLogLevelClass(level) {
 async function loadEmployees() {
   try {
     const response = await fetch("/api/data/employees");
-    if (!response.ok) return;
+    if (!response.ok) {
+      console.error("loadEmployees failed:", response.status, await response.text());
+      return;
+    }
 
     const employees = await response.json();
     const tableBody = document.getElementById("employeesTable");
@@ -2272,6 +2432,7 @@ async function loadEmployees() {
           <td>${emp.employeeID}</td>
           <td>${emp.firstName}</td>
           <td>${emp.lastName}</td>
+          <td>${emp.initials || ''}</td>
           <td><span class="badge bg-${emp.isAdmin ? 'primary' : 'secondary'}">${emp.isAdmin ? 'Yes' : 'No'}</span></td>
           <td><span class="badge bg-${emp.isActive ? 'success' : 'danger'}">${emp.isActive ? 'Active' : 'Inactive'}</span></td>
           <td>
@@ -2319,6 +2480,7 @@ function editEmployee(employee) {
   document.getElementById("employeeID").setAttribute("readonly", "readonly");
   document.getElementById("firstName").value = employee.firstName;
   document.getElementById("lastName").value = employee.lastName;
+  document.getElementById("initials").value = employee.initials || "";
   document.getElementById("isAdmin").checked = employee.isAdmin;
   document.getElementById("isActive").checked = employee.isActive;
   
@@ -2335,6 +2497,7 @@ async function saveEmployee() {
     employeeID: employeeIDValue || "",
     firstName: document.getElementById("firstName").value,
     lastName: document.getElementById("lastName").value,
+    initials: document.getElementById("initials").value.toUpperCase(),
     isAdmin: document.getElementById("isAdmin").checked,
     isActive: document.getElementById("isActive").checked
   };
@@ -2533,7 +2696,15 @@ function showError(message) {
         </div>
     `;
 
-  document.querySelector(".toast-container").appendChild(errorToast);
+  // Use existing toast container or create one dynamically
+  let container = document.querySelector(".toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.className = "toast-container";
+    container.style.cssText = "position:fixed;bottom:20px;right:20px;z-index:1100;";
+    document.body.appendChild(container);
+  }
+  container.appendChild(errorToast);
 
   const toast = new bootstrap.Toast(errorToast);
   toast.show();
@@ -2756,7 +2927,13 @@ function getVisibleColumns() {
 
 function showToast(message, type = "info") {
   // Create a temporary toast for notifications
-  const toastContainer = document.querySelector(".toast-container");
+  let toastContainer = document.querySelector(".toast-container");
+  if (!toastContainer) {
+    toastContainer = document.createElement("div");
+    toastContainer.className = "toast-container position-fixed bottom-0 end-0 p-3";
+    toastContainer.style.zIndex = "1100";
+    document.body.appendChild(toastContainer);
+  }
   const toastId = "toast-" + Date.now();
 
   const toastHtml = `
@@ -3039,7 +3216,7 @@ function displayCompanyHistoryModal(firmanr, history) {
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="companyHistoryModalLabel">
-              <i class="fas fa-history"></i> ${t('history_for_company')}: ${firmanr}
+              <i class="fas fa-history"></i> ${t('history_for_company')}: ${formatGroupKeyForDisplay(firmanr)}
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
@@ -3169,4 +3346,377 @@ function filterHistory() {
     
     row.style.display = showRow ? '' : 'none';
   });
+}
+// ═══════════════════════════════════════════════════════════════════════
+// ALLOWED KONCERNNR_ MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════
+
+let _allKoncernnrItems = [];
+
+async function loadAllowedKoncernnr() {
+  try {
+    const response = await fetch('/api/admin/allowed-koncernnr');
+    if (!response.ok) {
+      console.error('loadAllowedKoncernnr failed:', response.status);
+      return;
+    }
+    const data = await response.json();
+    _allKoncernnrItems = data.items || [];
+
+    // Update master toggle
+    const toggle = document.getElementById('koncernnrFilterToggle');
+    const label  = document.getElementById('koncernnrFilterLabel');
+    if (toggle) toggle.checked = data.filterEnabled === true;
+    if (label)  label.textContent = data.filterEnabled ? 'FILTERING ON' : 'FILTERING OFF';
+
+    renderKoncernnrGrid(_allKoncernnrItems);
+  } catch (err) {
+    console.error('Error loading allowed koncernnr:', err);
+  }
+}
+
+function renderKoncernnrGrid(items) {
+  const grid       = document.getElementById('allowedKoncernnrGrid');
+  const emptyState = document.getElementById('koncernnrEmptyState');
+  const countEl    = document.getElementById('koncernnrCount');
+  if (!grid) return;
+
+  if (countEl) {
+    const active = items.filter(i => i.isActive).length;
+    countEl.textContent = `${items.length} entr${items.length === 1 ? 'y' : 'ies'} · ${active} active`;
+  }
+
+  if (items.length === 0) {
+    grid.innerHTML = '';
+    if (emptyState) emptyState.classList.remove('d-none');
+    return;
+  }
+  if (emptyState) emptyState.classList.add('d-none');
+
+  grid.innerHTML = items.map(item => {
+    const badgeColor  = item.isActive ? 'linear-gradient(135deg,#00a2a0,#007a78)' : 'linear-gradient(135deg,#94a3b8,#64748b)';
+    const statusBadge = item.isActive
+      ? '<span class="badge rounded-pill" style="background:#d1fae5;color:#065f46;font-size:.7rem;">Active</span>'
+      : '<span class="badge rounded-pill" style="background:#f1f5f9;color:#64748b;font-size:.7rem;">Inactive</span>';
+    const addedDate   = item.addedDate ? new Date(item.addedDate).toLocaleDateString('da-DK') : '—';
+
+    return `
+      <div class="col-12 col-sm-6 col-lg-4 koncernnr-card-item"
+           data-value="${(item.koncernnrValue || '').toLowerCase()}"
+           data-desc="${(item.description || '').toLowerCase()}">
+        <div class="h-100 d-flex flex-column rounded-3 p-3 gap-2"
+             style="border:1px solid #e2e8f0;background:#fff;transition:box-shadow .2s;box-shadow:0 1px 4px rgba(0,0,0,.06);"
+             onmouseenter="this.style.boxShadow='0 4px 16px rgba(0,162,160,.15)'"
+             onmouseleave="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
+
+          <!-- Top row: circle badge + value -->
+          <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 fw-bold text-white"
+                 style="width:52px;height:52px;font-size:1.15rem;background:${badgeColor};letter-spacing:.5px;">
+              ${item.koncernnrValue}
+            </div>
+            <div class="flex-grow-1 min-w-0">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="fw-bold" style="font-size:1.05rem;color:#1e293b;">Koncernnr_ ${item.koncernnrValue}</span>
+                ${statusBadge}
+              </div>
+              <div class="text-muted text-truncate" style="font-size:.8rem;">
+                ${item.description || '<em>No description</em>'}
+              </div>
+            </div>
+          </div>
+
+          <!-- Meta -->
+          <div class="d-flex gap-3 mt-1" style="font-size:.75rem;color:#94a3b8;">
+            <span><i class="fas fa-user me-1"></i>${item.addedBy}</span>
+            <span><i class="fas fa-calendar me-1"></i>${addedDate}</span>
+          </div>
+
+          <!-- Actions -->
+          <div class="d-flex gap-2 mt-auto pt-2 border-top" style="border-color:#f1f5f9!important;">
+            <button class="btn btn-sm flex-fill"
+                    style="background:#f0fdfa;color:#0d9488;border:1px solid #ccfbf1;font-size:.8rem;"
+                    onclick='editKoncernnr(${JSON.stringify(item)})'>
+              <i class="fas fa-edit me-1"></i> Edit
+            </button>
+            <button class="btn btn-sm"
+                    style="background:#fff5f5;color:#ef4444;border:1px solid #fecaca;font-size:.8rem;min-width:2.6rem;"
+                    onclick="deleteKoncernnr(${item.id})" title="Remove">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function filterAllowedKoncernnr() {
+  const term = (document.getElementById('koncernnrSearch')?.value || '').toLowerCase().trim();
+  if (!term) {
+    renderKoncernnrGrid(_allKoncernnrItems);
+    return;
+  }
+  const filtered = _allKoncernnrItems.filter(i =>
+    (i.koncernnrValue || '').toLowerCase().includes(term) ||
+    (i.description  || '').toLowerCase().includes(term)
+  );
+  renderKoncernnrGrid(filtered);
+}
+
+function showAddKoncernnrModal() {
+  document.getElementById('koncernnrModalTitle').textContent = 'Add Allowed Koncernnr_';
+  document.getElementById('koncernnrEditId').value   = '';
+  document.getElementById('koncernnrValue').value       = '';
+  document.getElementById('koncernnrDescription').value = '';
+  document.getElementById('koncernnrIsActive').checked  = true;
+  new bootstrap.Modal(document.getElementById('koncernnrModal')).show();
+}
+
+function editKoncernnr(item) {
+  document.getElementById('koncernnrModalTitle').textContent = 'Edit Allowed Koncernnr_';
+  document.getElementById('koncernnrEditId').value           = item.id;
+  document.getElementById('koncernnrValue').value            = item.koncernnrValue;
+  document.getElementById('koncernnrDescription').value      = item.description || '';
+  document.getElementById('koncernnrIsActive').checked       = item.isActive;
+  new bootstrap.Modal(document.getElementById('koncernnrModal')).show();
+}
+
+async function saveKoncernnr() {
+  const id          = document.getElementById('koncernnrEditId').value;
+  const value       = (document.getElementById('koncernnrValue').value || '').trim();
+  const description = (document.getElementById('koncernnrDescription').value || '').trim();
+  const isActive    = document.getElementById('koncernnrIsActive').checked;
+
+  if (!value) {
+    showToast('Koncernnr_ value is required.', 'error');
+    document.getElementById('koncernnrValue').focus();
+    return;
+  }
+
+  const payload = { id: id ? parseInt(id) : 0, koncernnrValue: value, description: description || null, isActive };
+  const isEdit  = !!id;
+  const url     = isEdit ? `/api/admin/allowed-koncernnr/${id}` : '/api/admin/allowed-koncernnr';
+  const method  = isEdit ? 'PUT' : 'POST';
+
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('koncernnrModal'))?.hide();
+      await loadAllowedKoncernnr();
+      showToast(isEdit ? 'Koncernnr_ updated!' : 'Koncernnr_ added!', 'success');
+    } else {
+      const err = await response.json().catch(() => ({}));
+      showToast(err.message || 'Failed to save', 'error');
+    }
+  } catch (err) {
+    console.error('saveKoncernnr error:', err);
+    showToast('Error saving koncernnr_', 'error');
+  }
+}
+
+async function deleteKoncernnr(id) {
+  if (!confirm('Remove this allowed koncernnr_ entry?')) return;
+  try {
+    const response = await fetch(`/api/admin/allowed-koncernnr/${id}`, { method: 'DELETE' });
+    if (response.ok) {
+      await loadAllowedKoncernnr();
+      showToast('Koncernnr_ removed.', 'success');
+    } else {
+      showToast('Failed to remove koncernnr_.', 'error');
+    }
+  } catch (err) {
+    console.error('deleteKoncernnr error:', err);
+    showToast('Error removing koncernnr_.', 'error');
+  }
+}
+
+async function setKoncernnrFilterEnabled(enabled) {
+  const label = document.getElementById('koncernnrFilterLabel');
+  const toggle = document.getElementById('koncernnrFilterToggle');
+  try {
+    if (toggle) toggle.disabled = true;
+    const response = await fetch('/api/admin/allowed-koncernnr/filter-enabled', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(enabled)
+    });
+    if (response.ok) {
+      if (label) label.textContent = enabled ? 'FILTERING ON' : 'FILTERING OFF';
+      showToast(
+        enabled
+          ? 'Filtering ON — dashboard now shows only allowed koncernnr_ values.'
+          : 'Filtering OFF — dashboard shows all data.',
+        'success'
+      );
+      await refreshDashboardDataAfterKoncernFilterToggle();
+    } else {
+      // Revert toggle on failure
+      if (toggle) toggle.checked = !enabled;
+      showToast('Failed to update filter setting.', 'error');
+    }
+  } catch (err) {
+    console.error('setKoncernnrFilterEnabled error:', err);
+    showToast('Error updating filter setting.', 'error');
+    if (toggle) toggle.checked = !enabled;
+  } finally {
+    if (toggle) toggle.disabled = false;
+  }
+}
+
+async function refreshDashboardDataAfterKoncernFilterToggle() {
+  try {
+    showLoading(true);
+    const response = await fetch('/api/data');
+    if (!response.ok) throw new Error('Failed to refresh dashboard data');
+    allData = await response.json();
+    processAndDisplayData();
+  } catch (err) {
+    console.error('refreshDashboardDataAfterKoncernFilterToggle error:', err);
+    showToast('Filter updated, but refresh failed. Please reload the page.', 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+let _koncernTourIndex = -1;
+let _koncernTourCleanup = null;
+
+function startKoncernnrTour() {
+  _koncernTourIndex = 0;
+  showKoncernnrTourStep(_koncernTourIndex);
+}
+
+function endKoncernnrTour() {
+  if (_koncernTourCleanup) {
+    _koncernTourCleanup();
+    _koncernTourCleanup = null;
+  }
+  const panel = document.getElementById('koncernnrTourPanel');
+  if (panel) panel.remove();
+  _koncernTourIndex = -1;
+}
+
+function showKoncernnrTourStep(index) {
+  const steps = [
+    {
+      selector: '#koncernnrTourStartBtn',
+      title: 'Welcome',
+      text: 'Use this ? button anytime to replay this Koncernnr_ Access Filter tour.'
+    },
+    {
+      selector: '#koncernnrFilterToggle',
+      title: 'Main Filter Toggle',
+      text: 'Turn this on to show only records where koncernnr_ is allowed and active in this tab.'
+    },
+    {
+      selector: '#koncernnrAddBtn',
+      title: 'Add Allowed Value',
+      text: 'Click here to add a new allowed koncernnr_ entry with optional description and active flag.'
+    },
+    {
+      selector: '#koncernnrSearch',
+      title: 'Search Entries',
+      text: 'Filter cards quickly by number or description.'
+    },
+    {
+      selector: '#allowedKoncernnrGrid',
+      title: 'Manage Existing Entries',
+      text: 'Each card shows status and metadata, with Edit and Delete actions for maintenance.'
+    }
+  ];
+
+  if (index < 0 || index >= steps.length) {
+    endKoncernnrTour();
+    return;
+  }
+
+  const step = steps[index];
+  const target = document.querySelector(step.selector);
+  if (!target) {
+    endKoncernnrTour();
+    return;
+  }
+
+  if (_koncernTourCleanup) {
+    _koncernTourCleanup();
+    _koncernTourCleanup = null;
+  }
+
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  const prevOutline = target.style.outline;
+  const prevOutlineOffset = target.style.outlineOffset;
+  const prevBoxShadow = target.style.boxShadow;
+
+  target.style.outline = '3px solid #facc15';
+  target.style.outlineOffset = '2px';
+  target.style.boxShadow = '0 0 0 6px rgba(250, 204, 21, 0.2)';
+
+  _koncernTourCleanup = () => {
+    target.style.outline = prevOutline;
+    target.style.outlineOffset = prevOutlineOffset;
+    target.style.boxShadow = prevBoxShadow;
+  };
+
+  const existingPanel = document.getElementById('koncernnrTourPanel');
+  if (existingPanel) existingPanel.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'koncernnrTourPanel';
+  panel.style.cssText = [
+    'position:fixed',
+    'right:20px',
+    'bottom:20px',
+    'width:340px',
+    'max-width:calc(100vw - 40px)',
+    'z-index:3000',
+    'background:#0f172a',
+    'color:#f8fafc',
+    'border-radius:12px',
+    'padding:14px',
+    'box-shadow:0 12px 30px rgba(0,0,0,.35)',
+    'border:1px solid rgba(255,255,255,.12)'
+  ].join(';');
+
+  panel.innerHTML = `
+    <div style="font-weight:700;font-size:.95rem;margin-bottom:6px;">${step.title}</div>
+    <div style="font-size:.84rem;line-height:1.35;opacity:.92;margin-bottom:12px;">${step.text}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div style="font-size:.75rem;opacity:.8;">Step ${index + 1} of ${steps.length}</div>
+      <div style="display:flex;gap:6px;">
+        <button type="button" id="koncernTourPrev" style="border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;border-radius:8px;padding:4px 10px;">Prev</button>
+        <button type="button" id="koncernTourNext" style="border:none;background:#14b8a6;color:#042f2e;border-radius:8px;padding:4px 10px;font-weight:700;">${index === steps.length - 1 ? 'Done' : 'Next'}</button>
+        <button type="button" id="koncernTourClose" style="border:none;background:#334155;color:#fff;border-radius:8px;padding:4px 10px;">Close</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(panel);
+
+  const prevBtn = document.getElementById('koncernTourPrev');
+  const nextBtn = document.getElementById('koncernTourNext');
+  const closeBtn = document.getElementById('koncernTourClose');
+
+  if (prevBtn) {
+    prevBtn.disabled = index === 0;
+    prevBtn.style.opacity = index === 0 ? '0.5' : '1';
+    prevBtn.onclick = () => showKoncernnrTourStep(index - 1);
+  }
+  if (nextBtn) {
+    nextBtn.onclick = () => {
+      if (index === steps.length - 1) {
+        endKoncernnrTour();
+      } else {
+        showKoncernnrTourStep(index + 1);
+      }
+    };
+  }
+  if (closeBtn) {
+    closeBtn.onclick = () => endKoncernnrTour();
+  }
 }

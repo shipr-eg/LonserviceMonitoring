@@ -79,4 +79,27 @@ app.MapControllerRoute(
 // Note: When running under IIS, URLs are managed by IIS, not by the app
 // For development, configure URLs in appsettings.json or launchSettings.json
 
+// Ensure AuditLog table has required columns (migration for CompanyDetails and SourceFilename)
+try
+{
+    using var conn = new SqlConnection(builder.Configuration.GetConnectionString("DefaultConnection"));
+    await conn.OpenAsync();
+    using var cmd = conn.CreateCommand();
+    cmd.CommandText = @"
+        IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'AuditLog' AND COLUMN_NAME = 'CompanyDetails')
+            ALTER TABLE AuditLog ADD CompanyDetails NVARCHAR(500) NULL;
+        IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'AuditLog' AND COLUMN_NAME = 'SourceFilename')
+            ALTER TABLE AuditLog ADD SourceFilename NVARCHAR(500) NULL;
+        -- Backfill CompanyDetails from old Firmanr column for any rows that predate the migration
+        IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'AuditLog' AND COLUMN_NAME = 'Firmanr')
+            UPDATE AuditLog SET CompanyDetails = Firmanr WHERE CompanyDetails IS NULL AND Firmanr IS NOT NULL;
+    ";
+    await cmd.ExecuteNonQueryAsync();
+    Log.Information("AuditLog schema migration completed.");
+}
+catch (Exception ex)
+{
+    Log.Warning(ex, "AuditLog schema migration failed (non-fatal): {Message}", ex.Message);
+}
+
 app.Run();

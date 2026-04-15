@@ -46,6 +46,7 @@ namespace LonserviceMonitoring.Models
         public string RecordId { get; set; } = string.Empty;
         public string Changes { get; set; } = string.Empty;
         public string? Firmanr { get; set; }
+        public string? CompanyDetails { get; set; }
         public string? SourceFilename { get; set; }
     }
 
@@ -139,5 +140,23 @@ namespace LonserviceMonitoring.Models
         
         // Additional computed property for display purposes
         // public decimal ContactedPercentage => TotalRecords > 0 ? (decimal)ContactedRecords / TotalRecords * 100 : 0;
+    }
+
+    public class AllowedKoncernnr
+    {
+        public int Id { get; set; }
+        public string KoncernnrValue { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public bool IsActive { get; set; } = true;
+        public string AddedBy { get; set; } = string.Empty;
+        public DateTime AddedDate { get; set; }
+    }
+
+    public class DashboardSetting
+    {
+        public string SettingKey { get; set; } = string.Empty;
+        public string SettingValue { get; set; } = string.Empty;
+        public string UpdatedBy { get; set; } = string.Empty;
+        public DateTime UpdatedDate { get; set; }
     }
 }

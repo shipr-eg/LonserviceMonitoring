@@ -44,10 +44,12 @@ namespace LonserviceMonitoring.Controllers
         {
             try
             {
-                var isAdmin = HttpContext.Session.GetString("AdminUser") != null;
-                if (!isAdmin)
+                // Allow any logged-in employee — admin panel is accessible to all users
+                var isAuthenticated = HttpContext.Session.GetString("EmployeeInitials") != null
+                                   || HttpContext.Session.GetString("AdminUser") != null;
+                if (!isAuthenticated)
                 {
-                    return Unauthorized(new { message = "Admin access required" });
+                    return Unauthorized(new { message = "Login required" });
                 }
 
                 var logs = await _dataService.GetAuditLogsAsync(searchTerm);
@@ -167,6 +169,90 @@ namespace LonserviceMonitoring.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error deleting employee", error = ex.Message });
+            }
+        }
+
+        // ── Allowed Koncernnr_ endpoints ─────────────────────────────────────────
+
+        [HttpGet("allowed-koncernnr")]
+        public async Task<ActionResult> GetAllowedKoncernnr()
+        {
+            try
+            {
+                var list = await _dataService.GetAllowedKoncernnrAsync();
+                var filterEnabled = await _dataService.GetKoncernnrFilterEnabledAsync();
+                return Ok(new { filterEnabled, items = list });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving allowed koncernnr list", error = ex.Message });
+            }
+        }
+
+        [HttpPost("allowed-koncernnr")]
+        public async Task<ActionResult> AddAllowedKoncernnr([FromBody] AllowedKoncernnr item)
+        {
+            try
+            {
+                var user = HttpContext.Session.GetString("AdminUser") ?? "Admin";
+                if (string.IsNullOrWhiteSpace(item.KoncernnrValue))
+                    return BadRequest(new { message = "KoncernnrValue is required" });
+
+                var success = await _dataService.AddAllowedKoncernnrAsync(item, user);
+                return success ? Ok(new { message = "Koncernnr_ added successfully" })
+                               : StatusCode(500, new { message = "Failed to add koncernnr_" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error adding koncernnr_", error = ex.Message });
+            }
+        }
+
+        [HttpPut("allowed-koncernnr/{id}")]
+        public async Task<ActionResult> UpdateAllowedKoncernnr(int id, [FromBody] AllowedKoncernnr item)
+        {
+            try
+            {
+                item.Id = id;
+                var user = HttpContext.Session.GetString("AdminUser") ?? "Admin";
+                var success = await _dataService.UpdateAllowedKoncernnrAsync(item, user);
+                return success ? Ok(new { message = "Koncernnr_ updated successfully" })
+                               : StatusCode(500, new { message = "Failed to update koncernnr_" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error updating koncernnr_", error = ex.Message });
+            }
+        }
+
+        [HttpDelete("allowed-koncernnr/{id}")]
+        public async Task<ActionResult> DeleteAllowedKoncernnr(int id)
+        {
+            try
+            {
+                var success = await _dataService.DeleteAllowedKoncernnrAsync(id);
+                return success ? Ok(new { message = "Koncernnr_ removed successfully" })
+                               : StatusCode(500, new { message = "Failed to remove koncernnr_" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error removing koncernnr_", error = ex.Message });
+            }
+        }
+
+        [HttpPut("allowed-koncernnr/filter-enabled")]
+        public async Task<ActionResult> SetKoncernnrFilterEnabled([FromBody] bool enabled)
+        {
+            try
+            {
+                var user = HttpContext.Session.GetString("AdminUser") ?? "Admin";
+                var success = await _dataService.SetKoncernnrFilterEnabledAsync(enabled, user);
+                return success ? Ok(new { message = $"Koncernnr_ filtering {(enabled ? "enabled" : "disabled")}" })
+                               : StatusCode(500, new { message = "Failed to update filter setting" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error updating filter setting", error = ex.Message });
             }
         }
     }

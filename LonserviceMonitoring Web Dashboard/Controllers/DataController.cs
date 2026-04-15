@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using LonserviceMonitoring.Models;
 using LonserviceMonitoring.Services;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace LonserviceMonitoring.Controllers
 {
@@ -193,22 +194,56 @@ namespace LonserviceMonitoring.Controllers
         }
 
         [HttpPost("companies")]
-        public async Task<ActionResult<CompanyDetails>> CreateCompany([FromBody] CompanyDetails company)
+        public async Task<ActionResult<CompanyDetails>> CreateCompany([FromBody] JsonElement payload)
         {
             try
             {
-
-                // Check model validation
-                if (!ModelState.IsValid)
+                string? GetStringProp(string name)
                 {
-                    return BadRequest(ModelState);
+                    if (payload.TryGetProperty(name, out var p) && p.ValueKind != JsonValueKind.Null)
+                    {
+                        return p.ToString();
+                    }
+                    return null;
                 }
 
-                if (string.IsNullOrWhiteSpace(company.Company))
+                bool HasProp(string name) => payload.TryGetProperty(name, out _);
+
+                var companyName = GetStringProp("Company") ?? GetStringProp("company");
+                var status = GetStringProp("ProcessedStatus") ?? GetStringProp("processedStatus");
+                var assigneeRaw = GetStringProp("Assignee") ?? GetStringProp("assignee");
+                var hasAssigneeField = HasProp("Assignee") || HasProp("assignee");
+                var hasStatusField = HasProp("ProcessedStatus") || HasProp("processedStatus");
+
+                if (string.IsNullOrWhiteSpace(companyName))
                 {
                     return BadRequest(new { message = "Company name is required" });
                 }
-                await _dataService.InsertCompanyDetailsAsync(company);
+
+                int? assignee = null;
+                if (!string.IsNullOrWhiteSpace(assigneeRaw))
+                {
+                    if (int.TryParse(assigneeRaw, out var parsedAssignee))
+                    {
+                        assignee = parsedAssignee;
+                    }
+                    else
+                    {
+                        return BadRequest(new { message = "Assignee must be a numeric employee ID or null" });
+                    }
+                }
+
+                var company = new CompanyDetails
+                {
+                    Company = companyName.Trim(),
+                    Assignee = assignee,
+                    ProcessedStatus = string.IsNullOrWhiteSpace(status) ? null : status.Trim()
+                };
+
+                var user = HttpContext.Session.GetString("EmployeeInitials")
+                        ?? HttpContext.Session.GetString("AdminUser")
+                        ?? "Unknown";
+                await _dataService.InsertCompanyDetailsAsync(company, user, hasAssigneeField, hasStatusField);
                 return Ok(company);
             }
             catch (Exception ex)

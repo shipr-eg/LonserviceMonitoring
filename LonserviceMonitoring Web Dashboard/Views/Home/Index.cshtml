@@ -105,17 +105,14 @@
         #dataContainer .table thead th:nth-child(2),
         #dataContainer .table thead th:nth-child(3),
         #dataContainer .table thead th:nth-child(4),
-        #dataContainer .table thead th:nth-child(5),
         #dataContainer .table tbody td:nth-child(1),
         #dataContainer .table tbody td:nth-child(2),
         #dataContainer .table tbody td:nth-child(3),
         #dataContainer .table tbody td:nth-child(4),
-        #dataContainer .table tbody td:nth-child(5),
         #dataContainer .filter-row th:nth-child(1),
         #dataContainer .filter-row th:nth-child(2),
         #dataContainer .filter-row th:nth-child(3),
-        #dataContainer .filter-row th:nth-child(4),
-        #dataContainer .filter-row th:nth-child(5) {
+        #dataContainer .filter-row th:nth-child(4) {
             position: sticky;
             background: white;
             z-index: 5;
@@ -130,69 +127,74 @@
         #dataContainer .filter-row th:nth-child(3) { left: 260px; z-index: 11; }
         #dataContainer .table thead th:nth-child(4),
         #dataContainer .filter-row th:nth-child(4) { left: 340px; z-index: 11; }
-        #dataContainer .table thead th:nth-child(5),
-        #dataContainer .filter-row th:nth-child(5) { left: 440px; z-index: 11; }
-        
+
         #dataContainer .table tbody td:nth-child(1) { left: 0px; }
         #dataContainer .table tbody td:nth-child(2) { left: 60px; }
         #dataContainer .table tbody td:nth-child(3) { left: 260px; }
         #dataContainer .table tbody td:nth-child(4) { left: 340px; }
-        #dataContainer .table tbody td:nth-child(5) { left: 440px; }
         
         /* Styling when scrolled - dark background and borders (scoped to data container) */
         #dataContainer .table-responsive.scrolled .table thead th:nth-child(1),
         #dataContainer .table-responsive.scrolled .table thead th:nth-child(2),
         #dataContainer .table-responsive.scrolled .table thead th:nth-child(3),
-        #dataContainer .table-responsive.scrolled .table thead th:nth-child(4),
-        #dataContainer .table-responsive.scrolled .table thead th:nth-child(5) {
+        #dataContainer .table-responsive.scrolled .table thead th:nth-child(4) {
             background: #2c3e50 !important;
             border-right: 1px solid #34495e !important;
         }
-        
+
         #dataContainer .table-responsive.scrolled .table tbody td:nth-child(1),
         #dataContainer .table-responsive.scrolled .table tbody td:nth-child(2),
         #dataContainer .table-responsive.scrolled .table tbody td:nth-child(3),
-        #dataContainer .table-responsive.scrolled .table tbody td:nth-child(4),
-        #dataContainer .table-responsive.scrolled .table tbody td:nth-child(5) {
-            background: #d1d8e0 !important;
+        #dataContainer .table-responsive.scrolled .table tbody td:nth-child(4) {
+            background: #f5f5f5 !important;
         }
-        
+
         #dataContainer .table-responsive.scrolled .filter-row th:nth-child(1),
         #dataContainer .table-responsive.scrolled .filter-row th:nth-child(2),
         #dataContainer .table-responsive.scrolled .filter-row th:nth-child(3),
-        #dataContainer .table-responsive.scrolled .filter-row th:nth-child(4),
-        #dataContainer .table-responsive.scrolled .filter-row th:nth-child(5) {
-            background: #d1d8e0 !important;
-            border-right: 1px solid #b8c1cc !important;
+        #dataContainer .table-responsive.scrolled .filter-row th:nth-child(4) {
+            background: #f5f5f5 !important;
+            border-right: 1px solid #e0e0e0 !important;
         }
-        
-        /* Add shadow to last frozen column when scrolled */
-        #dataContainer .table-responsive.scrolled .table thead th:nth-child(5) {
-            box-shadow: 4px 0 8px rgba(0,0,0,0.25) !important;
-            border-right: 2px solid #1a252f !important;
+
+        /* Shadow on last frozen column (4th) when scrolled */
+        #dataContainer .table-responsive.scrolled .table thead th:nth-child(4) {
+            box-shadow: 4px 0 6px rgba(0,0,0,0.12) !important;
+            border-right: 1px solid #34495e !important;
         }
-        
-        #dataContainer .table-responsive.scrolled .table tbody td:nth-child(5),
-        #dataContainer .table-responsive.scrolled .filter-row th:nth-child(5) {
-            box-shadow: 4px 0 8px rgba(0,0,0,0.2) !important;
-            border-right: 2px solid #a4b0be !important;
+
+        #dataContainer .table-responsive.scrolled .table tbody td:nth-child(4),
+        #dataContainer .table-responsive.scrolled .filter-row th:nth-child(4) {
+            box-shadow: 4px 0 6px rgba(0,0,0,0.08) !important;
+            border-right: 1px solid #e0e0e0 !important;
         }
-        
-        /* Striped rows should respect frozen columns when scrolled */
+
+        /* Striped rows — frozen columns when scrolled */
         #dataContainer .table-responsive.scrolled .table-striped tbody tr:nth-of-type(odd) td:nth-child(1),
         #dataContainer .table-responsive.scrolled .table-striped tbody tr:nth-of-type(odd) td:nth-child(2),
         #dataContainer .table-responsive.scrolled .table-striped tbody tr:nth-of-type(odd) td:nth-child(3),
-        #dataContainer .table-responsive.scrolled .table-striped tbody tr:nth-of-type(odd) td:nth-child(4),
-        #dataContainer .table-responsive.scrolled .table-striped tbody tr:nth-of-type(odd) td:nth-child(5) {
-            background-color: #c3cbd6 !important;
+        #dataContainer .table-responsive.scrolled .table-striped tbody tr:nth-of-type(odd) td:nth-child(4) {
+            background-color: #ebebeb !important;
         }
-        
+
         #dataContainer .table-responsive.scrolled .table tbody tr:hover td:nth-child(1),
         #dataContainer .table-responsive.scrolled .table tbody tr:hover td:nth-child(2),
         #dataContainer .table-responsive.scrolled .table tbody tr:hover td:nth-child(3),
-        #dataContainer .table-responsive.scrolled .table tbody tr:hover td:nth-child(4),
-        #dataContainer .table-responsive.scrolled .table tbody tr:hover td:nth-child(5) {
-            background-color: #b8c5d6 !important;
+        #dataContainer .table-responsive.scrolled .table tbody tr:hover td:nth-child(4) {
+            background-color: #e2e6ea !important;
+        }
+
+        /* Source-file-subheader: override frozen-column backgrounds at all states */
+        #dataContainer .table tbody .source-file-subheader td,
+        #dataContainer .table-responsive.scrolled .table tbody .source-file-subheader td,
+        #dataContainer .table-responsive.scrolled .table-striped tbody .source-file-subheader td {
+            background: #f8f9fa !important;
+            color: #374151 !important;
+            position: relative !important;
+            left: 0 !important;
+            z-index: 1 !important;
+            box-shadow: none !important;
+            border-right: none !important;
         }
         
         /* Style filter inputs in frozen columns when scrolled */
@@ -200,12 +202,10 @@
         #dataContainer .table-responsive.scrolled .filter-row th:nth-child(2) input,
         #dataContainer .table-responsive.scrolled .filter-row th:nth-child(3) input,
         #dataContainer .table-responsive.scrolled .filter-row th:nth-child(4) input,
-        #dataContainer .table-responsive.scrolled .filter-row th:nth-child(5) input,
         #dataContainer .table-responsive.scrolled .filter-row th:nth-child(1) select,
         #dataContainer .table-responsive.scrolled .filter-row th:nth-child(2) select,
         #dataContainer .table-responsive.scrolled .filter-row th:nth-child(3) select,
-        #dataContainer .table-responsive.scrolled .filter-row th:nth-child(4) select,
-        #dataContainer .table-responsive.scrolled .filter-row th:nth-child(5) select {
+        #dataContainer .table-responsive.scrolled .filter-row th:nth-child(4) select {
             background: white !important;
             border: 1px solid #a4b0be !important;
             box-shadow: inset 0 1px 3px rgba(0,0,0,0.1) !important;
@@ -252,8 +252,8 @@
         
         .notes-input:focus {
             background: #fff;
-            border: 1px solid #0d6efd;
-            box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.1);
+            border: 1px solid #00a2a0;
+            box-shadow: 0 0 0 0.2rem rgba(0,162,160,0.1);
             outline: none;
         }
         
@@ -338,8 +338,8 @@
         }
         
         .active-filter {
-            border-color: #0d6efd;
-            background-color: #e7f1ff;
+            border-color: #00a2a0;
+            background-color: #e6f7f7;
         }
         
         .toast-container {
@@ -351,7 +351,7 @@
         
         .save-toast {
             min-width: 300px;
-            background: linear-gradient(135deg, #0d6efd, #6610f2);
+            background: linear-gradient(135deg, #00a2a0, #007a78);
             color: white;
             border: none;
             border-radius: 10px;
@@ -438,6 +438,43 @@
             border-radius: 8px;
         }
         
+        .source-file-subheader td {
+            background: #f8f9fa !important;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: #374151 !important;
+            padding: 8px 10px 4px 10px;
+            border-top: 1px solid #e9ecef;
+            border-bottom: none;
+            letter-spacing: 0.2px;
+        }
+
+        .source-file-subheader td i {
+            color: #9ca3af !important;
+            filter: grayscale(100%);
+        }
+
+        /* Icon-only buttons in group headers — no border, no background, light grey */
+        .group-header .btn {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #9ca3af !important;
+            padding: 2px 8px;
+        }
+
+        .group-header .btn:hover {
+            background: rgba(0,0,0,0.06) !important;
+            color: #6b7280 !important;
+            transform: none;
+            box-shadow: none !important;
+        }
+
+        .group-header .btn i {
+            color: inherit !important;
+            filter: grayscale(100%);
+        }
+
         @@media (max-width: 768px) {
             .container-fluid {
                 width: 98% !important;
@@ -496,10 +533,10 @@
                             <i class="fas fa-user me-1"></i>@ViewBag.EmployeeName (@ViewBag.EmployeeInitials)
                         </div>
                     </div>
-                    <button class="btn btn-light" onclick="toggleAdminView()">
+                    <button class="btn header-btn" onclick="toggleAdminView()">
                         <i class="fas fa-user-shield me-2"></i>Admin Panel
                     </button>
-                    <a href="/Home/Logout" class="btn btn-outline-danger" title="Logout">
+                    <a href="/Home/Logout" class="btn header-btn-icon" title="Logout">
                         <i class="fas fa-sign-out-alt"></i>
                     </a>
                 </div>
@@ -516,10 +553,10 @@
                 <span id="newDataCount"></span>
             </div>
             <div class="ms-3">
-                <button class="btn btn-light btn-sm me-2" onclick="saveAndRefresh()">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;" onclick="saveAndRefresh()">
                     <i class="fas fa-save me-1"></i> Save & Refresh
                 </button>
-                <button class="btn btn-outline-light btn-sm" onclick="hideNewDataBanner()">
+                <button class="btn btn-sm" style="background:none;border:none;color:rgba(255,255,255,0.7);padding:4px 8px;" onclick="hideNewDataBanner()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -544,10 +581,10 @@
                 </div>
                 <div class="col-md-5">
                     <div class="d-flex gap-2 mt-1">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="clearAllFilters()">
+                        <button class="btn btn-sm toolbar-text-btn" onclick="clearAllFilters()">
                             <i class="fas fa-times me-1"></i> Clear Filters
                         </button>
-                        
+
                         <div class="form-check form-switch ms-2 d-flex align-items-center">
                             <input class="form-check-input" type="checkbox" id="toggleProcessed" onchange="toggleShowProcessed()">
                             <label class="form-check-label ms-2" for="toggleProcessed">
@@ -555,15 +592,15 @@
                             </label>
                         </div>
 
-                        <button class="btn btn-sm btn-outline-primary ms-auto">
+                        <button class="btn btn-sm toolbar-icon-btn ms-auto" title="Audit Logs" onclick="openAuditLogsTab()">
                              <i class="fas fa-history"></i>
                         </button>
 
-                        <button class="btn btn-sm btn-outline-primary" data-toggle="tooltip" data-placement="top" title="Expand All" onclick="expandAllGroups()">
-                            <i class="fas fa-expand-alt me-1"></i>
+                        <button class="btn btn-sm toolbar-icon-btn" title="Expand All" onclick="expandAllGroups()">
+                            <i class="fas fa-expand-alt"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-primary" data-toggle="tooltip" data-placement="top" title="Collapse All" onclick="collapseAllGroups()">
-                            <i class="fas fa-compress-alt me-1"></i>
+                        <button class="btn btn-sm toolbar-icon-btn" title="Collapse All" onclick="collapseAllGroups()">
+                            <i class="fas fa-compress-alt"></i>
                         </button>
                         <!--
                         <button class="btn btn-sm btn-outline-info" onclick="showColumnVisibilityModal()">
@@ -577,7 +614,7 @@
         </div>
         <!-- Loading Spinner -->
         <div id="loadingSpinner" class="text-center py-5">
-            <div class="spinner-border text-primary" role="status">
+            <div class="spinner-border" style="color:#00a2a0;" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
             <div class="mt-2">Loading dashboard data...</div>
@@ -633,6 +670,13 @@
                                     <button class="nav-link" id="employees-tab" data-bs-toggle="tab" 
                                             data-bs-target="#employees" type="button" role="tab">
                                         <i class="fas fa-users me-1"></i> Employees
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="allowed-koncernnr-tab" data-bs-toggle="tab" 
+                                            data-bs-target="#allowed-koncernnr" type="button" role="tab"
+                                            onclick="loadAllowedKoncernnr()">
+                                        <i class="fas fa-filter me-1"></i> Allowed Koncernnr_
                                     </button>
                                 </li>
                                 <li class="nav-item" role="presentation">
@@ -694,6 +738,7 @@
                                                     <th>Employee ID</th>
                                                     <th>First Name</th>
                                                     <th>Last Name</th>
+                                                    <th>Initials</th>
                                                     <th>Is Admin</th>
                                                     <th>Is Active</th>
                                                     <th>Actions</th>
@@ -706,6 +751,72 @@
                                     </div>
                                 </div>
 
+                                <!-- Allowed Koncernnr_ Tab -->
+                                <div class="tab-pane fade" id="allowed-koncernnr" role="tabpanel">
+                                    <!-- Feature description banner -->
+                                    <div id="koncernnrFilterBanner" class="rounded-3 mb-4 px-4 py-3 d-flex align-items-start gap-3"
+                                         style="background: linear-gradient(135deg,#0d4f4e 0%,#00a2a0 100%); color:#fff;">
+                                        <i class="fas fa-filter fa-2x mt-1 opacity-75"></i>
+                                        <div>
+                                            <div class="fw-bold fs-6 mb-1">Koncernnr_ Access Filter</div>
+                                            <div style="font-size:0.85rem;opacity:.88;">
+                                                When enabled, the dashboard only loads data for koncernnr_ values in this list.
+                                                Inactive entries are stored for reference but do not filter data.
+                                                <strong>Toggle the switch below to activate filtering.</strong>
+                                            </div>
+                                        </div>
+                                        <!-- Master toggle -->
+                                        <div class="ms-auto d-flex flex-column align-items-center gap-2 flex-shrink-0">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <button id="koncernnrTourStartBtn" type="button"
+                                                        class="btn btn-sm text-white fw-bold"
+                                                        title="Start tour"
+                                                        onclick="startKoncernnrTour()"
+                                                        style="width:28px;height:28px;line-height:1;border-radius:50%;padding:0;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.15);">?</button>
+                                                <div class="form-check form-switch m-0">
+                                                <input class="form-check-input" type="checkbox" role="switch"
+                                                       id="koncernnrFilterToggle" style="width:3rem;height:1.5rem;cursor:pointer;"
+                                                       onchange="setKoncernnrFilterEnabled(this.checked)">
+                                                </div>
+                                            </div>
+                                            <label class="form-check-label" for="koncernnrFilterToggle"
+                                                   style="font-size:0.75rem;font-weight:600;letter-spacing:.4px;">
+                                                <span id="koncernnrFilterLabel">Loading…</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Toolbar -->
+                                    <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                                        <button id="koncernnrAddBtn" class="btn btn-sm px-3 py-2 fw-semibold text-white"
+                                                style="background:linear-gradient(135deg,#00a2a0,#007a78);border:none;border-radius:8px;"
+                                                onclick="showAddKoncernnrModal()">
+                                            <i class="fas fa-plus me-1"></i> Add Allowed Koncernnr_
+                                        </button>
+                                        <div class="input-group" style="max-width:280px;">
+                                            <span class="input-group-text" style="background:#f8f9fa;border-right:none;">
+                                                <i class="fas fa-search text-muted" style="font-size:.8rem;"></i>
+                                            </span>
+                                            <input type="text" id="koncernnrSearch" class="form-control form-control-sm"
+                                                   placeholder="Search list…" oninput="filterAllowedKoncernnr()"
+                                                   style="border-left:none;">
+                                        </div>
+                                        <span class="ms-auto text-muted" style="font-size:.8rem;" id="koncernnrCount"></span>
+                                    </div>
+
+                                    <!-- Cards grid -->
+                                    <div id="allowedKoncernnrGrid" class="row g-3">
+                                        <!-- Cards rendered by JS -->
+                                    </div>
+
+                                    <!-- Empty state -->
+                                    <div id="koncernnrEmptyState" class="text-center py-5 d-none">
+                                        <i class="fas fa-filter fa-3x mb-3" style="color:#cbd5e1;"></i>
+                                        <p class="text-muted fw-semibold mb-1">No entries yet</p>
+                                        <p class="text-muted" style="font-size:.85rem;">Add a koncernnr_ value to start filtering dashboard data.</p>
+                                    </div>
+                                </div>
+
                                 <!-- Audit Logs Tab -->
                                 <div class="tab-pane fade" id="audit-logs" role="tabpanel">
                                     <div class="mb-3">
@@ -713,9 +824,10 @@
                                             <span class="input-group-text">
                                                 <i class="fas fa-search"></i>
                                             </span>
-                                            <input type="text" id="auditSearch" class="form-control" 
-                                                   placeholder="Search audit logs...">
-                                            <button class="btn btn-outline-secondary" onclick="searchAuditLogs()">
+                                            <input type="text" id="auditSearch" class="form-control"
+                                                   placeholder="Search audit logs..."
+                                                   oninput="filterAuditLogs()">
+                                            <button class="btn btn-outline-secondary" onclick="filterAuditLogs()">
                                                 Search
                                             </button>
                                         </div>
@@ -728,7 +840,7 @@
                                                     <th>Timestamp</th>
                                                     <th>Action</th>
                                                     <th>User</th>
-                                                    <th>Record ID</th>
+                                                    <th>Company</th>
                                                     <th>Changes</th>
                                                 </tr>
                                             </thead>
@@ -802,6 +914,10 @@
                             <label class="form-label">Last Name</label>
                             <input type="text" id="lastName" class="form-control" required>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">Initials</label>
+                            <input type="text" id="initials" class="form-control" maxlength="6" required style="text-transform:uppercase;">
+                        </div>
                         <div class="form-check mb-3">
                             <input type="checkbox" id="isAdmin" class="form-check-input">
                             <label class="form-check-label" for="isAdmin">Is Admin</label>
@@ -815,6 +931,51 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" onclick="saveEmployee()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Allowed Koncernnr_ Add/Edit Modal -->
+    <div class="modal fade" id="koncernnrModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+            <div class="modal-content" style="border-radius:14px;overflow:hidden;border:none;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+                <div class="modal-header text-white border-0 pb-2"
+                     style="background:linear-gradient(135deg,#0d4f4e,#00a2a0);">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fas fa-filter me-2"></i>
+                        <span id="koncernnrModalTitle">Add Allowed Koncernnr_</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="koncernnrEditId">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Koncernnr_ Value <span class="text-danger">*</span></label>
+                        <input type="text" id="koncernnrValue" class="form-control"
+                               placeholder="e.g. 10" style="font-size:1.1rem;font-weight:600;letter-spacing:.5px;">
+                        <div class="form-text">Enter the exact value as it appears in CsvData.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <input type="text" id="koncernnrDescription" class="form-control"
+                               placeholder="Optional note about this group…">
+                    </div>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="koncernnrIsActive" checked style="width:2.5rem;height:1.3rem;">
+                        <label class="form-check-label fw-semibold ms-2" for="koncernnrIsActive">Active</label>
+                        <div class="form-text">Inactive entries are kept for reference but do not filter data.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 px-4 pb-4 gap-2">
+                    <button type="button" class="btn btn-outline-secondary flex-fill"
+                            data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn text-white flex-fill fw-semibold"
+                            style="background:linear-gradient(135deg,#00a2a0,#007a78);border:none;"
+                            onclick="saveKoncernnr()">
+                        <i class="fas fa-save me-1"></i> Save
+                    </button>
                 </div>
             </div>
         </div>
